@@ -1,2 +1,24 @@
-# pydoc
-Emacs mode for navigating Python documentation through pydoc.
+#Pydoc, the Python documentation navigation package using pydoc
+
+## Documentation
+
+If you want the documentation for a Python object, simply
+type:
+
+```
+M-x pydoc <python object>
+```
+
+Example in Python 3:
+
+```
+M-x pydoc datetime.datetime.now
+```
+
+## License
+
+This project is free software: You can redistribute it and/or modify
+it under the terms of the
+[https://github.com/statmobile/pydoc/gpl.txt](GNU General Public
+License), either version 3 of the License, or (at your option) any
+later version.

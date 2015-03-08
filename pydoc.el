@@ -1,22 +1,32 @@
-;;; pydoc.el --- pydoc - functional, syntax highlighted python documentation
-;; Copyright (C) 2014
-;;
+;;; pydoc.el --- functional, syntax highlighted pydoc navigation
+
+;; Copyright (C) 2015 John Kitchin
+
 ;; Author: John Kitchin <jkitchin@andrew.cmu.edu>
+;; Maintainer: Brian J. Lopes <statmobile@gmail.com>
+;; Created: 8 Mar 2015
+;; Version 1.0
+;; Keywords: pydoc, python
+;; Homepage: https://github.com/statmobile/pydoc
 
 ;;; Commentary:
+
 ;; This module runs pydoc on an argument, inserts the output into a
 ;; buffer, and then linkifies and colorizes the buffer. For example,
 ;; some things are linked to open the source code, or to run pydoc on
 ;; them. Some things are colorized for readability, e.g. environment
 ;; variables and strings, function names and arguments.
 ;;
-;; https://github.com/jkitchin/jmax/blob/master/pydoc.el
+;; https://github.com/statmobile/pydoc
 ;;
 ;; There is one command. M-x pydoc
 
+;;; Changelog:
+;;
+;; Updated license and headers for release.
+
+
 ;;; Code:
-
-
 ;; we use org-mode for python fontification
 (unless (featurep 'org)
   (require 'org))
