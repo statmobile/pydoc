@@ -18,7 +18,6 @@ M-x pydoc datetime.datetime.now
 ## License
 
 This project is free software: You can redistribute it and/or modify
-it under the terms of the
-[https://github.com/statmobile/pydoc/gpl.txt](GNU General Public
-License), either version 3 of the License, or (at your option) any
-later version.
+it under the terms of the [gpl.txt](GNU General Public License),
+either version 3 of the License, or (at your option) any later
+version.
