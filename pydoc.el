@@ -5,7 +5,7 @@
 ;; Author: John Kitchin <jkitchin@andrew.cmu.edu>
 ;; Maintainer: Brian J. Lopes <statmobile@gmail.com>
 ;; Created: 8 Mar 2015
-;; Version 1.0
+;; Version: 0.1
 ;; Keywords: pydoc, python
 ;; Homepage: https://github.com/statmobile/pydoc
 
