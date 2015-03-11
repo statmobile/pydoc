@@ -419,7 +419,7 @@ This is not perfect, as the data entries are not always in the file defined, e.g
   ;; won't add multiple instances, and revisiting a NAME will move you
   ;; around in the history.
   (add-to-list '*pydoc-history* name t)
-  (setq *pydoc-index* (-elem-index name *pydoc-history*))
+  ;(setq *pydoc-index* (-elem-index name *pydoc-history*)) ; possible bug
 
   ;; save
   (when *pydoc-current*
