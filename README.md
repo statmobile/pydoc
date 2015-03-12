@@ -1,5 +1,5 @@
 #Pydoc, the Python documentation navigation package using pydoc
-
+[![MELPA](http://melpa.org/packages/pydoc-badge.svg)](http://melpa.org/#/pydoc)
 ## Documentation
 
 If you want the documentation for a Python object, simply
