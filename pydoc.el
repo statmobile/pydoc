@@ -28,8 +28,7 @@
 
 ;;; Code:
 ;; we use org-mode for python fontification
-(unless (featurep 'org)
-  (require 'org))
+(require 'org)
 
 (defvar *pydoc-current* nil
  "Stores current pydoc command.")
