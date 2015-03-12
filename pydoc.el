@@ -44,6 +44,9 @@
 (defvar *pydoc-index* 0
   "Current index in the history.")
 
+(defvar pydoc-file nil)
+(defvar pydoc-name nil)
+
 (defun pydoc-get-name ()
   "Get NAME and store locally."
   (goto-char (point-min))
@@ -425,8 +428,8 @@ This is not perfect, as the data entries are not always in the file defined, e.g
       (setq *pydoc-last* *pydoc-current*))
   (setq *pydoc-current* name)
 
-  (make-variable-buffer-local 'pydoc-file)
-  (make-variable-buffer-local 'pydoc-name)
+  (make-local-variable 'pydoc-file)
+  (make-local-variable 'pydoc-name)
 
   (save-excursion
     (pydoc-get-name)
@@ -446,17 +449,17 @@ This is not perfect, as the data entries are not always in the file defined, e.g
   ;; make read-only and press q to quit. add some navigation keys
   (setq buffer-read-only t)
   (use-local-map (copy-keymap text-mode-map))
-  (local-set-key "q" #'(lambda () (interactive) (kill-buffer)))
-  (local-set-key "n" #'(lambda () (interactive) (next-line)))
-  (local-set-key "N" #'(lambda () (interactive) (forward-page)))
-  (local-set-key "p" #'(lambda () (interactive) (previous-line)))
-  (local-set-key "P" #'(lambda () (interactive) (backward-page)))
-  (local-set-key "f" #'(lambda () (interactive) (forward-char)))
-  (local-set-key "b" #'(lambda () (interactive) (backward-char)))
-  (local-set-key "F" #'(lambda () (interactive) (forward-word)))
-  (local-set-key "B" #'(lambda () (interactive) (backward-word)))
+  (local-set-key "q" #'kill-buffer)
+  (local-set-key "n" #'next-line)
+  (local-set-key "N" #'forward-page)
+  (local-set-key "p" #'previous-line)
+  (local-set-key "P" #'backward-page)
+  (local-set-key "f" #'forward-char)
+  (local-set-key "b" #'backward-char)
+  (local-set-key "F" #'forward-word)
+  (local-set-key "B" #'backward-word)
   (local-set-key "o" #'(lambda () (interactive) (call-interactively 'occur)))
-  (local-set-key "s" #'(lambda () (interactive) (isearch-forward)))
+  (local-set-key "s" #'isearch-forward)
   (font-lock-mode))
 
 (provide 'pydoc)
