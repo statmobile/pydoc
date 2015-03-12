@@ -429,8 +429,8 @@ This is not perfect, as the data entries are not always in the file defined, e.g
       (setq *pydoc-last* *pydoc-current*))
   (setq *pydoc-current* name)
 
-  (make-variable-buffer-local 'pydoc-file)
-  (make-variable-buffer-local 'pydoc-name)
+  (make-local-variable 'pydoc-file)
+  (make-local-variable 'pydoc-name)
 
   (save-excursion
     (pydoc-get-name)
