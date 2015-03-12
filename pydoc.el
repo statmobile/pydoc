@@ -45,6 +45,9 @@
 (defvar *pydoc-index* 0
   "Current index in the history.")
 
+(defvar pydoc-file nil)
+(defvar pydoc-name nil)
+
 (defun pydoc-get-name ()
   "Get NAME and store locally."
   (goto-char (point-min))
