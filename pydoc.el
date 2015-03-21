@@ -47,6 +47,81 @@
 (defvar pydoc-file nil)
 (defvar pydoc-name nil)
 
+;;; faces
+
+(defface pydoc-file-link-face
+  '((t  (:foreground "blue" :underline t)))
+  "Link to a file."
+  :group 'pydoc-faces)
+
+(defface pydoc-package-link-face
+  '((t  (:foreground "blue" :underline t)))
+  "Link to a package."
+  :group 'pydoc-faces)
+
+(defface pydoc-mouse-face
+  '((t (:inherit highlight)))
+  "Mouse over face."
+  :group 'pydoc-faces)
+
+(defface pydoc-class-face
+  '((t (:foreground "SteelBlue3")))
+  "Class name"
+  :group 'pydoc-faces)
+
+(defface pydoc-superclass-face
+  '((t (:foreground "SteelBlue4" :underline t)))
+  "Superclass name"
+  :group 'pydoc-faces)
+
+(defface pydoc-callable-name-face
+  '((t (:foreground "brown")))
+  "Method or function face."
+  :group 'pydoc-faces)
+
+(defface pydoc-callable-param-face
+  '((t (:foreground "red")))
+  "Method or function arguments face. Also used in sphinx
+documentation."
+  :group 'pydoc-faces)
+
+(defface pydoc-envvars-face
+  '((t (:foreground "forest green")))
+  "Environment variables face."
+  :group 'pydoc-faces)
+
+(defface pydoc-data-face
+  '((t (:foreground "brown")))
+  "DATA face."
+  :group 'pydoc-faces)
+
+(defface pydoc-string-face
+  '((t (:foreground "forest green")))
+  "String face."
+  :group 'pydoc-faces)
+
+(defface pydoc-button-face
+  '((t (:inherit button)))
+  "String face."
+  :group 'pydoc-faces)
+
+(defface pydoc-sphinx-directive-face
+  '((t (:foreground "SteelBlue4" :underline t)))
+  "Sphinx directive face."
+  :group 'pydoc-faces)
+
+(defface pydoc-sphinx-param-name-face
+  '((t (:foreground "red")))
+  ""
+  :group 'pydoc-faces)
+
+(defface pydoc-sphinx-param-type-face
+  '((t (:foreground "DeepSkyBlue3")))
+  "Sphinx optional type face."
+  :group 'pydoc-faces)
+
+;;; en faces
+
 (defun pydoc-get-name ()
   "Get NAME and store locally."
   (goto-char (point-min))
@@ -81,8 +156,8 @@ opens the file."
       (set-text-properties
        start end
        `(local-map, map
-		   font-lock-face (:foreground "blue"  :underline t)
-		   mouse-face highlight
+		   face pydoc-file-link-face
+		   mouse-face pydoc-mouse-face
 		   help-echo "mouse-1: click to open")))))
 
 
@@ -117,8 +192,8 @@ opens the file."
 	 (+ (line-beginning-position) start)
 	 (+ (line-beginning-position) end)
 	 `(local-map, map
-		      font-lock-face (:foreground "blue"  :underline t)
-		      mouse-face highlight
+		      face pydoc-package-link-face
+		      mouse-face pydoc-mouse-face
 		      help-echo (format "mouse-1: click to open %s" ,package))))
       (forward-line))))
 
@@ -149,14 +224,14 @@ These tend to be something like:
       (set-text-properties
        start end
        `(local-map, map
-		    font-lock-face (:foreground "brown")
-		    mouse-face highlight
+		    face pydoc-callable-name-face
+		    mouse-face pydoc-mouse-face
 		    help-echo (format "mouse-1: click to open %s" ,function)))
 
       (set-text-properties
        (match-beginning 2)
        (match-end 2)
-       '(font-lock-face (:foreground "red"))))))
+       '(face pydoc-callable-param-face)))))
 
 
 (defun pydoc-colorize-functions ()
@@ -186,14 +261,14 @@ These are in a special section called Functions."
 	(set-text-properties
 	 start end
 	 `(local-map, map
-		     font-lock-face (:foreground "brown")
-		     mouse-face highlight
+		     face pydoc-callable-name-face
+		     mouse-face pydoc-mouse-face
 		     help-echo (format "mouse-1: click to open %s" ,function)))
 
 	(set-text-properties
 	 (match-beginning 2)
 	 (match-end 2)
-	 '(font-lock-face (:foreground "red")))))))
+	 '(face pydoc-callable-param-face))))))
 
 
 (defun pydoc-colorize-envvars ()
@@ -203,7 +278,7 @@ These are in a special section called Functions."
     (set-text-properties
      (match-beginning 0)
      (match-end 0)
-     '(font-lock-face (:foreground "forest green")))))
+     '(face pydoc-envvars-face))))
 
 
 (defun pydoc-colorize-strings ()
@@ -217,7 +292,7 @@ This is not very robust, e.g. it fails if quotes cross lines, or if they are use
     (set-text-properties
      (match-beginning 0)
      (match-end 0)
-     '(font-lock-face (:foreground "forest green")))))
+     '(face pydoc-string-face))))
 
 
 (defun pydoc-linkify-sphinx-directives ()
@@ -240,8 +315,8 @@ we just colorize parameters in red."
        (match-beginning 2)
        (match-end 2)
        `(local-map, map
-		    font-lock-face (:foreground "SteelBlue4"  :underline t)
-		    mouse-face highlight
+		    face pydoc-sphinx-directive-face
+		    mouse-face pydoc-mouse-face
 		    help-echo
 		    (format "mouse-1: pydoc %s" ,(match-string 1))))))
 
@@ -255,7 +330,7 @@ we just colorize parameters in red."
     (set-text-properties
      (match-beginning 2)
      (match-end 2)
-     '(font-lock-face (:foreground "red"))))
+     '(face pydoc-sphinx-directive-face)))
 
   ;; :param type name:
   (goto-char (point-min))
@@ -275,20 +350,20 @@ we just colorize parameters in red."
       (set-text-properties
        (match-beginning 1)
        (match-end 1)
-       '(font-lock-face (:foreground "red"))))
+       '(face pydoc-sphinx-param-name-face)))
      ;; both type and arg
      (t
       ;; optional type
       (set-text-properties
        (match-beginning 1)
        (match-end 1)
-       '(font-lock-face (:foreground "DeepSkyBlue3")))
+       '(face pydoc-sphinx-param-type-face))
 
       ;; arg
       (set-text-properties
        (match-beginning 2)
        (match-end 2)
-       '(font-lock-face (:foreground "red")))))))
+       '(face pydoc-sphinx-param-name-face))))))
 
 
 (defun pydoc-fontify-inline-code ()
@@ -322,8 +397,8 @@ we just colorize parameters in red."
        (match-beginning 1)
        (match-end 1)
        `(local-map, map
-		    font-lock-face (:foreground "SteelBlue3")
-		    mouse-face highlight
+		    face pydoc-class-face
+		    mouse-face pydoc-mouse-face
 		    help-echo "mouse-1: click to open")))
 
     ;; colorize and link superclass
@@ -339,8 +414,8 @@ we just colorize parameters in red."
        (match-beginning 2)
        (match-end 2)
        `(local-map, map
-		    font-lock-face (:foreground "SteelBlue4"  :underline t)
-		    mouse-face highlight
+		    face pydoc-superclass-face
+		    mouse-face pydoc-mouse-face
 		    help-echo
 		    (format "mouse-1: pydoc %s" ,(match-string 2)))))))
 
@@ -367,8 +442,8 @@ This is not perfect, as the data entries are not always in the file defined, e.g
 	(set-text-properties
 	 start end
 	 `(local-map, map
-		      font-lock-face (:foreground "brown")
-		      mouse-face highlight
+		      face pydoc-data-face
+		      mouse-face pydoc-mouse-face
 		      help-echo (format "mouse-1: click to go to %s" ,token)))))))
 
 
@@ -384,8 +459,8 @@ This is not perfect, as the data entries are not always in the file defined, e.g
     (insert
      (propertize "[Back]"
 		 'local-map map
-		 'font-lock-face '(:foreground "blue"  :underline t)
-		 'mouse-face 'highlight
+		 'face 'pydoc-button-face
+		 'mouse-face 'pydoc-mouse-face
 		 'help-echo "mouse-1: click to return")))
 
   (let ((map (make-sparse-keymap)))
@@ -399,8 +474,8 @@ This is not perfect, as the data entries are not always in the file defined, e.g
       "  "
       (propertize "[Forward]"
 		  'local-map map
-		  'font-lock-face '(:foreground "blue"  :underline t)
-		  'mouse-face 'highlight
+		  'face 'pydoc-button-face
+		  'mouse-face 'pydoc-mouse-face
 		  'help-echo "mouse-1: click to return")))))
 
 
