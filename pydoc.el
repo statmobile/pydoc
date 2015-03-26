@@ -5,7 +5,7 @@
 ;; Author: John Kitchin <jkitchin@andrew.cmu.edu>
 ;; Maintainer: Brian J. Lopes <statmobile@gmail.com>
 ;; Created: 8 Mar 2015
-;; Version 1.0
+;; Version: 0.1
 ;; Keywords: pydoc, python
 ;; Homepage: https://github.com/statmobile/pydoc
 
@@ -34,10 +34,8 @@
 (defvar *pydoc-current* nil
  "Stores current pydoc command.")
 
-
 (defvar *pydoc-last* nil
  "Stores the last pydoc command.")
-
 
 (defvar *pydoc-history* '()
   "History for pydoc commands.")
@@ -419,7 +417,7 @@ This is not perfect, as the data entries are not always in the file defined, e.g
   ;; won't add multiple instances, and revisiting a NAME will move you
   ;; around in the history.
   (add-to-list '*pydoc-history* name t)
-  (setq *pydoc-index* (-elem-index name *pydoc-history*))
+  ;(setq *pydoc-index* (-elem-index name *pydoc-history*))
 
   ;; save
   (when *pydoc-current*
