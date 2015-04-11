@@ -49,13 +49,13 @@
 
 ;;; faces
 
-(defface pydoc-source-file-link-face
-  '((t  (:inherit link)))
+(defface pydoc-file-link-face
+  '((t  (:foreground "blue" :underline t)))
   "Link to a file."
   :group 'pydoc-faces)
 
 (defface pydoc-package-link-face
-  '((t  (:inherit link)))
+  '((t  (:foreground "blue" :underline t)))
   "Link to a package."
   :group 'pydoc-faces)
 
@@ -64,18 +64,18 @@
   "Mouse over face."
   :group 'pydoc-faces)
 
-(defface pydoc-class-name-link-face
-  '((t (:inherit link)))
+(defface pydoc-class-face
+  '((t (:foreground "SteelBlue3")))
   "Class name"
   :group 'pydoc-faces)
 
-(defface pydoc-superclass-name-link-face
-  '((t (:inherit link)))
+(defface pydoc-superclass-face
+  '((t (:foreground "SteelBlue4" :underline t)))
   "Superclass name"
   :group 'pydoc-faces)
 
 (defface pydoc-callable-name-face
-  '((t (:inherit font-lock-function-name-face)))
+  '((t (:foreground "brown")))
   "Method or function face."
   :group 'pydoc-faces)
 
@@ -86,17 +86,17 @@ documentation."
   :group 'pydoc-faces)
 
 (defface pydoc-envvars-face
-  '((t (:inherit font-lock-variable-name-face)))
+  '((t (:foreground "forest green")))
   "Environment variables face."
   :group 'pydoc-faces)
 
 (defface pydoc-data-face
-  '((t (:inherit font-lock-variable-name-face)))
+  '((t (:foreground "brown")))
   "DATA face."
   :group 'pydoc-faces)
 
 (defface pydoc-string-face
-  '((t (:inherit font-lock-string-face)))
+  '((t (:foreground "forest green")))
   "String face."
   :group 'pydoc-faces)
 
@@ -112,12 +112,12 @@ documentation."
 
 (defface pydoc-sphinx-param-name-face
   '((t (:foreground "red")))
-  "Sphinx callable parameter name face."
+  ""
   :group 'pydoc-faces)
 
 (defface pydoc-sphinx-param-type-face
   '((t (:foreground "DeepSkyBlue3")))
-  "Sphinx callable parameter type face."
+  "Sphinx optional type face."
   :group 'pydoc-faces)
 
 ;;; en faces
@@ -156,7 +156,7 @@ opens the file."
       (set-text-properties
        start end
        `(local-map, map
-		   face pydoc-source-file-link-face
+		   face pydoc-file-link-face
 		   mouse-face pydoc-mouse-face
 		   help-echo "mouse-1: click to open")))))
 
@@ -397,7 +397,7 @@ we just colorize parameters in red."
        (match-beginning 1)
        (match-end 1)
        `(local-map, map
-		    face pydoc-class-name-link-face
+		    face pydoc-class-face
 		    mouse-face pydoc-mouse-face
 		    help-echo "mouse-1: click to open")))
 
@@ -414,7 +414,7 @@ we just colorize parameters in red."
        (match-beginning 2)
        (match-end 2)
        `(local-map, map
-		    face pydoc-superclass-name-link-face
+		    face pydoc-superclass-face
 		    mouse-face pydoc-mouse-face
 		    help-echo
 		    (format "mouse-1: pydoc %s" ,(match-string 2)))))))
