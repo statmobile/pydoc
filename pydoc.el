@@ -314,7 +314,7 @@ class, func and mod directive links will run pydoc on the link contents.
 we just colorize parameters in red."
 
   (goto-char (point-min))
-  (while (re-search-forward ":\\(class\\|func\\|mod\\):`\\([^`]*\\)`" nil t)
+  (while (re-search-forward ":\\(class\\|func\\|mod\\):`~?\\([^`]*\\)`" nil t)
     (let ((map (make-sparse-keymap)))
       ;; we run pydoc on the func
       (define-key map [mouse-1]
