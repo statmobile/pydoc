@@ -117,11 +117,20 @@ Keys include
       py-function
       py-class
 
+      py-topic-list   (from \"pydoc topics\")
+      py-keyword-list (from \"pydoc keywords\")
+      py-module-list  (from \"pydoc modules\")
+
+      py-topic
+      py-keyword
+
       not-found
       unknown
 
   name
-    The name of the object for the current help buffer.
+    The name of the object for the current help buffer.  This will be
+    nil for help on topics as well as topic, keyword, and modules
+    lists.
 
   in
     The name object, if any, that conains the object display in the
@@ -167,8 +176,28 @@ See `pydoc-info' for more details on the keys."
      ((looking-at "Help on class \\(.+\\) in \\(.+\\):")
       (list :name (match-string-no-properties 1) :type 'py-class
             :in (match-string-no-properties 2)))
+     ((looking-at "The \"\\(.+\\)\" statement")
+      (list :name (match-string-no-properties 1) :type 'py-keyword))
      ((looking-at "no Python documentation found for")
       (list :type 'not-found))
+     ((looking-at "\\w+.*\n\\*+")
+      (list :type 'py-topic))
+     ((looking-at (concat "\nHere is a list of available topics."
+                          "  Enter any topic name to get more help.$"))
+      (list :type 'py-topic-list :start (match-end 0)))
+     ((looking-at (concat "\nHere is a list of the Python keywords."
+                          "  Enter any keyword to get more help.$"))
+      (list :type 'py-keyword-list :start (match-end 0)))
+     ;; This should be the last branch before t because it doesn't
+     ;; restore point back to the beginning of the buffer.
+     ((re-search-forward
+       "Please wait a moment while I gather a list of all available modules...$"
+       nil t)
+      ;; ^ This may not be at a predictable line due to import
+      ;; messages, so search for it.
+      (let ((start (point)))
+        (re-search-forward "Enter any module name to get more help.")
+        (list :type 'py-module-list :start start :end (match-beginning 0))))
      (t
       (list :type 'unknown)))))
 
@@ -219,6 +248,11 @@ Execute BODY for each sucessful search."
             (inhibit-read-only t))
         (cl-case (plist-get pydoc-info :type)
           ((not-found py-function py-class))
+          ((py-topic py-keyword)
+           (pydoc--buttonize-related-topics))
+          ((py-keyword-list py-topic-list py-module-list)
+           (goto-char (plist-get pydoc-info :start))
+           (pydoc--buttonize-help-list (plist-get pydoc-info :end)))
           (py-module
            (pydoc--buttonize-file)
            (when pydoc-file
@@ -245,6 +279,20 @@ Execute BODY for each sucessful search."
         (insert "\n")
         (pydoc--insert-navigation-links)
         (set-buffer-modified-p old-modified)))))
+
+(defun pydoc--buttonize-help-list (&optional limit)
+  (save-excursion
+    (while (re-search-forward "\\b\\w+\\b" limit t)
+      (help-xref-button 0 'pydoc-help (match-string 0)))))
+
+(defun pydoc--buttonize-related-topics ()
+  (save-excursion
+    (when (re-search-forward "^Related help topics: \\(\\w+\\)"
+                             nil t)
+      (help-xref-button 1 'pydoc-help (match-string 1))
+      (let ((line-end (point-at-eol)))
+        (while (re-search-forward ",\\s-*\\(\\w+\\)" line-end t)
+          (help-xref-button 1 'pydoc-help (match-string 1)))))))
 
 ;; This is taken from `help-make-xrefs'.
 (defun pydoc--insert-navigation-links ()
