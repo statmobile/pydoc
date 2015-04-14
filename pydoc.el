@@ -30,6 +30,17 @@
 ;; we use org-mode for python fontification
 (require 'org)
 
+(defgroup pydoc nil
+  "Help buffer for pydoc."
+  :prefix "pydoc"
+  :group 'external
+  :group 'help)
+
+(defcustom pydoc-command "python -m pydoc"
+  "The command to use to run pydoc."
+  :type 'string
+  :group 'pydoc)
+
 (defvar *pydoc-current* nil
  "Stores current pydoc command.")
 
@@ -488,7 +499,7 @@ This is not perfect, as the data entries are not always in the file defined, e.g
   (switch-to-buffer-other-window "*pydoc*")
   (setq buffer-read-only nil)
   (erase-buffer)
-  (insert (shell-command-to-string (format "python -m pydoc %s" name)))
+  (insert (shell-command-to-string (concat pydoc-command " " name)))
   (goto-char (point-min))
 
   ;; store name at end of history if it is not in the history
