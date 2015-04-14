@@ -221,6 +221,15 @@ An alist of (section . position) cells is returned, where
               sections))
       sections)))
 
+(defun pydoc-jump-to-section (section)
+  "Jump to pydoc SECTION."
+  (interactive
+   (list (completing-read "Section: "
+                          (mapcar #'car (plist-get pydoc-info :sections)))))
+  (let ((start (pydoc--section-start section)))
+    (when start
+      (goto-char start))))
+
 (defun pydoc--section-start (section)
   "Return start position for SECTION.
 Value is obtained from buffer-local `pydoc-info'."
@@ -420,6 +429,7 @@ These are lines marked by `pydoc-example-code-leader-re'."
     (define-key map "B" 'backward-word)
     (define-key map "o" 'occur)
     (define-key map "s" 'isearch-forward)
+    (define-key map "j" 'pydoc-jump-to-section)
     map)
   "Keymap for Pydoc mode.")
 
