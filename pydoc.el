@@ -524,7 +524,7 @@ This is not perfect, as the data entries are not always in the file defined, e.g
   ;; make read-only and press q to quit. add some navigation keys
   (setq buffer-read-only t)
   (use-local-map (copy-keymap text-mode-map))
-  (local-set-key "q" #'kill-buffer)
+  (local-set-key "q" #'(lambda () (interactive) (quit-window t)))
   (local-set-key "n" #'next-line)
   (local-set-key "N" #'forward-page)
   (local-set-key "p" #'previous-line)
