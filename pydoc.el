@@ -27,469 +27,458 @@
 
 
 ;;; Code:
-
-(require 'cl-lib)
-(require 'goto-addr)
-(require 'help-mode)
 ;; we use org-mode for python fontification
 (require 'org)
 
-
-;;; Options
+(defvar *pydoc-current* nil
+ "Stores current pydoc command.")
 
-(defgroup pydoc nil
-  "Help buffer for pydoc."
-  :prefix "pydoc"
-  :group 'external
-  :group 'help)
 
-(defcustom pydoc-command "python -m pydoc"
-  "The command to use to run pydoc."
-  :type 'string
-  :group 'pydoc)
+(defvar *pydoc-last* nil
+ "Stores the last pydoc command.")
 
-(defcustom pydoc-make-method-buttons t
-  "If non-nil, create buttons for methods."
-  :type 'boolean
-  :group 'pydoc)
 
-(defcustom pydoc-after-finish-hook nil
-  "Hook run by after pydoc buffer is prepared."
-  :type 'hook
-  :group 'pydoc)
+(defvar *pydoc-history* '()
+  "History for pydoc commands.")
 
-(defface pydoc-example-leader-face
-  '((t (:inherit font-lock-doc-face)))
-  "Face used to highlight code example leader (e.g., \">>>\").")
+(defvar *pydoc-index* 0
+  "Current index in the history.")
 
-
-;;; Buttons
+(defvar pydoc-file nil)
+(defvar pydoc-name nil)
 
-(define-button-type 'pydoc-source
-  :supertype 'help-xref
-  'help-function 'find-file-other-window
-  'help-echo (purecopy "mouse-2, RET: visit file"))
+;;; faces
 
-(define-button-type 'pydoc-source-search
-  :supertype 'help-xref
-  'help-function (lambda (file search)
-                   (find-file-other-window file)
-                   (goto-char (point-min))
-                   (re-search-forward search nil t)
-                   (beginning-of-line))
-  'help-echo (purecopy "mouse-2, RET: view in source"))
+(defface pydoc-source-file-link-face
+  '((t  (:inherit link)))
+  "Link to a file."
+  :group 'pydoc-faces)
 
-(define-button-type 'pydoc-help
-  :supertype 'help-xref
-  'help-function (lambda (pkg) (pydoc pkg))
-  'help-echo (purecopy "mouse-2, RET: view pydoc help"))
+(defface pydoc-package-link-face
+  '((t  (:inherit link)))
+  "Link to a package."
+  :group 'pydoc-faces)
 
-
-;;; Buffer information
+(defface pydoc-mouse-face
+  '((t (:inherit highlight)))
+  "Mouse over face."
+  :group 'pydoc-faces)
 
-(defconst pydoc-sections-re
-  (rx line-start
-      (group
-       (one-or-more (any upper))
-       (zero-or-more (and (any space) (one-or-more (any upper)))))
-      line-end)
-  "Regular expression matching top-level pydoc sections.")
+(defface pydoc-class-name-link-face
+  '((t (:inherit link)))
+  "Class name"
+  :group 'pydoc-faces)
 
-(defvar pydoc-file nil
-  "File associated with the current pydoc buffer.
-The help for modules and packages have a \"FILE\" section (unless
-they are built-in module like `sys`).")
-(put 'pydoc-file 'permanent-local t)
-(make-variable-buffer-local 'pydoc-file)
+(defface pydoc-superclass-name-link-face
+  '((t (:inherit link)))
+  "Superclass name"
+  :group 'pydoc-faces)
 
-(defvar pydoc-info nil
-  "Plist with information about the current pydoc buffer.
+(defface pydoc-callable-name-face
+  '((t (:inherit font-lock-function-name-face)))
+  "Method or function face."
+  :group 'pydoc-faces)
 
-Keys include
+(defface pydoc-callable-param-face
+  '((t (:foreground "red")))
+  "Method or function arguments face. Also used in sphinx
+documentation."
+  :group 'pydoc-faces)
 
-  type
-    The type of object.  This will always be non-nil.  Possible values
-    are
+(defface pydoc-envvars-face
+  '((t (:inherit font-lock-variable-name-face)))
+  "Environment variables face."
+  :group 'pydoc-faces)
 
-      py-package
-      py-module
+(defface pydoc-data-face
+  '((t (:inherit font-lock-variable-name-face)))
+  "DATA face."
+  :group 'pydoc-faces)
 
-      py-function
-      py-class
+(defface pydoc-string-face
+  '((t (:inherit font-lock-string-face)))
+  "String face."
+  :group 'pydoc-faces)
 
-      py-topic-list   (from \"pydoc topics\")
-      py-keyword-list (from \"pydoc keywords\")
-      py-module-list  (from \"pydoc modules\")
+(defface pydoc-button-face
+  '((t (:inherit button)))
+  "String face."
+  :group 'pydoc-faces)
 
-      py-topic
-      py-keyword
+(defface pydoc-sphinx-directive-face
+  '((t (:foreground "SteelBlue4" :underline t)))
+  "Sphinx directive face."
+  :group 'pydoc-faces)
 
-      not-found
-      unknown
+(defface pydoc-sphinx-param-name-face
+  '((t (:foreground "red")))
+  "Sphinx callable parameter name face."
+  :group 'pydoc-faces)
 
-  name
-    The name of the object for the current help buffer.  This will be
-    nil for help on topics as well as topic, keyword, and modules
-    lists.
+(defface pydoc-sphinx-param-type-face
+  '((t (:foreground "DeepSkyBlue3")))
+  "Sphinx callable parameter type face."
+  :group 'pydoc-faces)
 
-  in
-    The name object, if any, that conains the object display in the
-    current help buffer.
+;;; en faces
 
-  sections
-    An alist of section names and positions (if the object has
-    sections).")
-(put 'pydoc-info'permanent-local t)
-(make-variable-buffer-local 'pydoc-info)
+(defun pydoc-get-name ()
+  "Get NAME and store locally."
+  (goto-char (point-min))
+  ;; the name sometimes is just a word, sometimes there is a - with a string
+  ;; after it.
+  (when (re-search-forward "^NAME
+    \\([a-zA-Z0-9_]*\\(\\..*\\)?\\)\\( -\\)?"
+			   nil t)
+    (setq pydoc-name (match-string 1))))
 
-(defun pydoc-set-info ()
-  "Set up `pydoc-info'for the current pydoc buffer."
-  (setq pydoc-info (pydoc-get-info))
-  (setq pydoc-info
-        (plist-put pydoc-info
-                   :sections (pydoc-get-sections))))
 
-(defun pydoc-get-info ()
-  "Return help name and type for the current pydoc buffer.
+(defun pydoc-make-file-link ()
+  "Find FILE in a pydoc buffer and make it a clickable link that
+opens the file."
+  (goto-char (point-min))
+  (when (re-search-forward "^FILE
+    \\(.*\\)$" nil t)
 
-Return a plist with the keywords :name, :type, and :in.  All
-return values will have a :type property.
+    (setq pydoc-file (match-string 1))
 
-See `pydoc-info' for more details on the keys."
-  (save-excursion
-    (goto-char (point-min))
+    (let ((map (make-sparse-keymap))
+	  (start (match-beginning 1))
+	  (end (match-end 1)))
+
+      ;; set file to be clickable to open the source
+      (define-key map [mouse-1]
+	`(lambda ()
+	  (interactive)
+	  (find-file ,pydoc-file)
+	  (goto-char (point-min))))
+
+      (set-text-properties
+       start end
+       `(local-map, map
+		   face pydoc-source-file-link-face
+		   mouse-face pydoc-mouse-face
+		   help-echo "mouse-1: click to open")))))
+
+
+(defun pydoc-make-package-links ()
+  "Make links in PACKAGE CONTENTS."
+  (goto-char (point-min))
+  (when (re-search-forward "^PACKAGE CONTENTS" nil t)
+    (forward-line)
+
+    (while (string-match
+	    "^    \\([a-zA-Z0-9_-]*\\)[ ]?\\((package)\\)?"
+	    (buffer-substring
+	     (line-beginning-position)
+	     (line-end-position)))
+
+      (let ((map (make-sparse-keymap))
+	    (start (match-beginning 1))
+	    (end (match-end 1))
+	    (package (concat
+		      pydoc-name "."
+		      (match-string 1
+				    (buffer-substring
+				     (line-beginning-position)
+				     (line-end-position))))))
+
+	(define-key map [mouse-1]
+	  `(lambda ()
+	    (interactive)
+	    (pydoc ,package)))
+
+	(set-text-properties
+	 (+ (line-beginning-position) start)
+	 (+ (line-beginning-position) end)
+	 `(local-map, map
+		      face pydoc-package-link-face
+		      mouse-face pydoc-mouse-face
+		      help-echo (format "mouse-1: click to open %s" ,package))))
+      (forward-line))))
+
+
+(defun pydoc-colorize-class-methods ()
+  "Colorize and linkify class methods.
+These tend to be something like:
+
+   | function_name(args)"
+  (goto-char (point-min))
+  ;; group1 is the method, group2 is the args
+  (while (re-search-forward "^\\s-+|  \\([a-zA-Z0-9_]*\\)(\\(.*\\))" nil t)
+
+    (let ((map (make-sparse-keymap))
+	  (start (match-beginning 1))
+	  (end (match-end 1))
+	  (function (match-string 1)))
+
+      (define-key map [mouse-1]
+	`(lambda ()
+	   (interactive)
+	   (find-file ,pydoc-file)
+	   (goto-char (point-min))
+	   (re-search-forward
+	    ;; fragile if spacing is not right
+	    (format "def %s(" ,function nil t))))
+
+      (set-text-properties
+       start end
+       `(local-map, map
+		    face pydoc-callable-name-face
+		    mouse-face pydoc-mouse-face
+		    help-echo (format "mouse-1: click to open %s" ,function)))
+
+      (set-text-properties
+       (match-beginning 2)
+       (match-end 2)
+       '(face pydoc-callable-param-face)))))
+
+
+(defun pydoc-colorize-functions ()
+  "Change color of function names and args.
+Also, make function names clickable so they open the source file
+at the function definition.
+
+These are in a special section called Functions."
+  (goto-char (point-min))
+  (when (re-search-forward "^Functions" nil t)
+    ;; we use this regexp to find functions "    name(args)"
+    (while (re-search-forward "    \\([a-zA-z0-9-]+\\)(\\([^)]*\\))" nil t)
+
+      (let ((map (make-sparse-keymap))
+	    (start (match-beginning 1))
+	    (end (match-end 1))
+	    (function (match-string 1)))
+
+	(define-key map [mouse-1]
+	  `(lambda ()
+	     (interactive)
+	     (find-file ,pydoc-file)
+	     (goto-char (point-min))
+	     (re-search-forward
+	      (format "def %s(" ,function nil t))))
+
+	(set-text-properties
+	 start end
+	 `(local-map, map
+		     face pydoc-callable-name-face
+		     mouse-face pydoc-mouse-face
+		     help-echo (format "mouse-1: click to open %s" ,function)))
+
+	(set-text-properties
+	 (match-beginning 2)
+	 (match-end 2)
+	 '(face pydoc-callable-param-face))))))
+
+
+(defun pydoc-colorize-envvars ()
+  "Makes environment variables a green color."
+  (goto-char (point-min))
+  (while (re-search-forward "\\$[a-zA-Z_]*\\>" nil t)
+    (set-text-properties
+     (match-beginning 0)
+     (match-end 0)
+     '(face pydoc-envvars-face))))
+
+
+(defun pydoc-colorize-strings ()
+  "Make strings in single ' or \" a green color.
+This is not very robust, e.g. it fails if quotes cross lines, or if they are used in mathematics."
+  (goto-char (point-min))
+  (while (re-search-forward
+	  "\\('\\|\\\"\\)[^'\"|
+]*\\('\\|\\\"\\)"
+		  nil t)
+    (set-text-properties
+     (match-beginning 0)
+     (match-end 0)
+     '(face pydoc-string-face))))
+
+
+(defun pydoc-linkify-sphinx-directives ()
+  "Make sphinx directives into clickable links.
+
+class, func and mod directive links will run pydoc on the link contents.
+
+we just colorize parameters in red."
+
+  (goto-char (point-min))
+  (while (re-search-forward ":\\(class\\|func\\|mod\\):`\\([^`]*\\)`" nil t)
+    (let ((map (make-sparse-keymap)))
+      ;; we run pydoc on the func
+      (define-key map [mouse-1]
+	`(lambda ()
+	  (interactive)
+	  (pydoc ,(match-string 2))))
+
+      (set-text-properties
+       (match-beginning 2)
+       (match-end 2)
+       `(local-map, map
+		    face pydoc-sphinx-directive-face
+		    mouse-face pydoc-mouse-face
+		    help-echo
+		    (format "mouse-1: pydoc %s" ,(match-string 1))))))
+
+  (goto-char (point-min))
+  ;; param, parameter, arg, argument, key, keyword
+  (while (re-search-forward
+	  (concat
+	   ":\\(param\\|parameter\\|arg\\|argument\\|key\\|keyword\\):"
+	   "`\\([^`]*\\)`")
+	  nil t)
+    (set-text-properties
+     (match-beginning 2)
+     (match-end 2)
+     '(face pydoc-sphinx-directive-face)))
+
+  ;; :param type name:
+  (goto-char (point-min))
+  (while (re-search-forward
+	  ":param\\s-*\\([^: ]*\\)\\s-*\\([^:]*\\):"
+	  nil t)
+
     (cond
-     ((looking-at "Help on package \\(.+\\) in \\(.+\\):")
-      (list :name (match-string-no-properties 1) :type 'py-package
-            :in (match-string-no-properties 2)))
-     ((looking-at "Help on package \\(.+\\):")
-      (list :name (match-string-no-properties 1) :type 'py-package))
-     ((looking-at "Help on \\(?:built-in \\)?module \\(.+\\) in \\(.+\\):")
-      (list :name (match-string-no-properties 1) :type 'py-module
-            :in (match-string-no-properties 2)))
-     ((looking-at "Help on \\(?:built-in \\)?module \\(.+\\):")
-      (list :name (match-string-no-properties 1) :type 'py-module))
-     ((looking-at (concat "Help on \\(?:built-in \\)?function \\(.+\\)"
-                          " in \\(?:module \\)?\\(.+\\):"))
-      (list :name (match-string-no-properties 1) :type 'py-function
-            :in (match-string-no-properties 2)))
-     ((looking-at "Help on class \\(.+\\) in \\(.+\\):")
-      (list :name (match-string-no-properties 1) :type 'py-class
-            :in (match-string-no-properties 2)))
-     ((looking-at "The \"\\(.+\\)\" statement")
-      (list :name (match-string-no-properties 1) :type 'py-keyword))
-     ((looking-at "no Python documentation found for")
-      (list :type 'not-found))
-     ((looking-at "\\w+.*\n\\*+")
-      (list :type 'py-topic))
-     ((looking-at (concat "\nHere is a list of available topics."
-                          "  Enter any topic name to get more help.$"))
-      (list :type 'py-topic-list :start (match-end 0)))
-     ((looking-at (concat "\nHere is a list of the Python keywords."
-                          "  Enter any keyword to get more help.$"))
-      (list :type 'py-keyword-list :start (match-end 0)))
-     ;; This should be the last branch before t because it doesn't
-     ;; restore point back to the beginning of the buffer.
-     ((re-search-forward
-       "Please wait a moment while I gather a list of all available modules...$"
-       nil t)
-      ;; ^ This may not be at a predictable line due to import
-      ;; messages, so search for it.
-      (let ((start (point)))
-        (re-search-forward "Enter any module name to get more help.")
-        (list :type 'py-module-list :start start :end (match-beginning 0))))
+     ;; neither present
+     ((and (string= "" (match-string 1))
+	   (string= "" (match-string 2)))
+      ;; pass
+      )
+     ;; no type and one arg.
+     ((and (not (string= "" (match-string 1)))
+	   (string= "" (match-string 2)))
+      (set-text-properties
+       (match-beginning 1)
+       (match-end 1)
+       '(face pydoc-sphinx-param-name-face)))
+     ;; both type and arg
      (t
-      (list :type 'unknown)))))
+      ;; optional type
+      (set-text-properties
+       (match-beginning 1)
+       (match-end 1)
+       '(face pydoc-sphinx-param-type-face))
 
-(defun pydoc-get-sections ()
-  "Return sections of the current pydoc buffer.
-An alist of (section . position) cells is returned, where
-\"section\" the lower case version of the section title."
-  (save-excursion
-    (goto-char (point-min))
-    (let (case-fold-search
-          sections name start next-start)
-      (while (re-search-forward pydoc-sections-re nil t)
-        (setq next-start (match-beginning 0))
-        (when name
-          (push (cons name (cons start (1- next-start)))
-                sections))
-        (setq name (downcase (match-string-no-properties 1))
-              start next-start))
-      (when name
-        (push (cons name (cons start (point-max)))
-              sections))
-      sections)))
+      ;; arg
+      (set-text-properties
+       (match-beginning 2)
+       (match-end 2)
+       '(face pydoc-sphinx-param-name-face))))))
 
-(defun pydoc-jump-to-section (section)
-  "Jump to pydoc SECTION."
-  (interactive
-   (list (completing-read "Section: "
-                          (mapcar #'car (plist-get pydoc-info :sections)))))
-  (let ((start (pydoc--section-start section)))
-    (when start
-      (goto-char start))))
 
-(defun pydoc--section-start (section)
-  "Return start position for SECTION.
-Value is obtained from buffer-local `pydoc-info'."
-  (car (cdr (assoc section (plist-get pydoc-info :sections)))))
-
-(defmacro pydoc--with-section (section regexp &rest body)
-  "Perform REGEXP search within SECTION.
-Execute BODY for each sucessful search."
-  (declare (indent 2))
-  `(let* ((section-pos (cdr (assoc ,section (plist-get pydoc-info :sections))))
-          (case-fold-search nil))
-     (when section-pos
-       (save-excursion
-         (goto-char (car section-pos))
-         (while (re-search-forward ,regexp (cdr section-pos) t)
-           ,@body)))))
-
-;; This is the pydoc version of `help-make-xrefs'.
-(defun pydoc-make-xrefs (&optional buffer)
-  (with-current-buffer (or buffer (current-buffer))
-    (save-excursion
-      (goto-char (point-min))
-      (let ((old-modified (buffer-modified-p))
-            (case-fold-search nil)
-            (inhibit-read-only t))
-        (cl-case (plist-get pydoc-info :type)
-          ((not-found py-function py-class))
-          ((py-topic py-keyword)
-           (pydoc--buttonize-related-topics))
-          ((py-keyword-list py-topic-list py-module-list)
-           (goto-char (plist-get pydoc-info :start))
-           (pydoc--buttonize-help-list (plist-get pydoc-info :end)))
-          (py-module
-           (pydoc--buttonize-file)
-           (when pydoc-file
-             (pydoc--buttonize-functions pydoc-file)
-             (pydoc--buttonize-classes pydoc-file)
-             (when pydoc-make-method-buttons
-               (pydoc--buttonize-methods pydoc-file))
-             (pydoc--buttonize-data pydoc-file)))
-          (py-package
-           (pydoc--buttonize-package-contents (plist-get pydoc-info :name))
-           (pydoc--buttonize-file)
-           (when pydoc-file
-             (pydoc--buttonize-functions pydoc-file)
-             (pydoc--buttonize-classes pydoc-file)
-             (when pydoc-make-method-buttons
-               (pydoc--buttonize-methods pydoc-file))
-             (pydoc--buttonize-data pydoc-file))))
-        (pydoc--buttonize-urls)
-        (pydoc--buttonize-sphinx)
-        ;; Delete extraneous newlines at the end of the docstring
-        (goto-char (point-max))
-        (while (and (not (bobp)) (bolp))
-          (delete-char -1))
-        (insert "\n")
-        (pydoc--insert-navigation-links)
-        (set-buffer-modified-p old-modified)))))
-
-(defun pydoc--buttonize-help-list (&optional limit)
-  (save-excursion
-    (while (re-search-forward "\\b\\w+\\b" limit t)
-      (help-xref-button 0 'pydoc-help (match-string 0)))))
-
-(defun pydoc--buttonize-related-topics ()
-  (save-excursion
-    (when (re-search-forward "^Related help topics: \\(\\w+\\)"
-                             nil t)
-      (help-xref-button 1 'pydoc-help (match-string 1))
-      (let ((line-end (point-at-eol)))
-        (while (re-search-forward ",\\s-*\\(\\w+\\)" line-end t)
-          (help-xref-button 1 'pydoc-help (match-string 1)))))))
-
-;; This is taken from `help-make-xrefs'.
-(defun pydoc--insert-navigation-links ()
-  (when (or help-xref-stack help-xref-forward-stack)
-    (insert "\n"))
-  ;; Make a back-reference in this buffer if appropriate.
-  (when help-xref-stack
-    (help-insert-xref-button help-back-label 'help-back
-                             (current-buffer)))
-  ;; Make a forward-reference in this buffer if appropriate.
-  (when help-xref-forward-stack
-    (when help-xref-stack
-      (insert "\t"))
-    (help-insert-xref-button help-forward-label 'help-forward
-                             (current-buffer)))
-  (when (or help-xref-stack help-xref-forward-stack)
-    (insert "\n")))
-
-(defun pydoc--buttonize-file ()
-  (let ((file-pos (pydoc--section-start "file")))
-    (when file-pos
-      (save-excursion
-        (goto-char file-pos)
-        (looking-at "^FILE\n    \\(.+\\)$")
-        (let ((file (match-string-no-properties 1)))
-          (when (file-exists-p file)    ; This may be "(built-in)".
-            (setq pydoc-file file)
-            (help-xref-button 1 'pydoc-source pydoc-file)))))))
-
-(defun pydoc--buttonize-urls ()
-  (save-excursion
-    (while (re-search-forward goto-address-url-regexp nil t)
-      (help-xref-button 0 'help-url (match-string 0)))))
-
-(defun pydoc--buttonize-functions (file)
-  (pydoc--with-section "functions"
-      "^\\s-+\\([_a-zA-z0-9]+\\)("
-    (let* ((func (match-string 1))
-           (search (format "def %s(" func)))
-      (help-xref-button 1 'pydoc-source-search file search))))
-
-(defun pydoc--buttonize-classes (file)
-  (pydoc--with-section "classes"
-      "    class \\([_A-z0-9]+\\)\\(?:(\\(.*\\))\\)*"
-    (let* ((class (match-string 1))
-           (search (format "^class %s\\b" class))
-           ;; TODO Sometimes this doesn't have full path.
-           (superclass (match-string 2)))
-      (help-xref-button 1 'pydoc-source-search file search)
-      (when superclass
-        (help-xref-button 2 'pydoc-help superclass)))))
-
-(defun pydoc--buttonize-methods (file)
-  (pydoc--with-section "classes"
-      "^     |  \\([a-zA-Z0-9_]*\\)(\\(.*\\))$"
-    ;; TODO This is not specific for the class it is under.
-    (let* ((meth (match-string 1))
-           (search (format "def %s(" meth)))
-      (help-xref-button 1 'pydoc-source-search file search))))
-
-(defun pydoc--buttonize-data (file)
-  (pydoc--with-section "data"
-      "^    \\([_A-Za-z0-9]+\\) ="
-    (help-xref-button 1 'pydoc-source-search file (match-string 1))))
-
-(defun pydoc--buttonize-sphinx ()
-  (save-excursion
-    ;; TODO Add method?
-    (while (re-search-forward ":\\(class\\|func\\|mod\\):`~?\\([^`]*\\)`" nil t)
-      (let ((name (match-string 2)))
-        (help-xref-button 2 'pydoc-help name)))))
-
-(defun pydoc--buttonize-package-contents (pkg-name)
-  (pydoc--with-section "package contents"
-      "^    \\([a-zA-Z0-9_-]*\\)[ ]?\\((package)\\)?$"
-    (let ((package (concat pkg-name "." (match-string 1))))
-      (help-xref-button 1 'pydoc-help package))))
-
-
-;;; Mode
-
-(defconst pydoc-example-code-leader-re
-  (rx line-start
-      (zero-or-one " |")                ; Within a class
-      (zero-or-more space)
-      (group (or ">>>" "..."
-                 (and "In [" (one-or-more digit) "]:")))
-      " "
-      (group (one-or-more not-newline))
-      line-end)
-  "Regular expression matching leader for Python code snippet.
-This will be use to highlight line with Python syntax
-highlightling.")
-
-(defun pydoc-fontify-inline-code (limit)
-  "Fontify example blocks up to LIMIT.
-These are lines marked by `pydoc-example-code-leader-re'."
-  (when (re-search-forward pydoc-example-code-leader-re limit t)
-    (set-text-properties (match-beginning 1) (match-end 1)
-                         '(font-lock-face pydoc-example-leader-face))
+(defun pydoc-fontify-inline-code ()
+  "fontify lines with >>> in them, which are inline python."
+  (goto-char (point-min))
+  (while (re-search-forward "\\(\\.\\.\\.\\|>>>\\)" nil t)
     (org-src-font-lock-fontify-block
-     "python" (match-beginning 2) (match-end 2))
-    t))
+     "python"
+     (line-beginning-position)
+     (line-end-position))))
 
-(defvar pydoc-font-lock-keywords
-  `((pydoc-fontify-inline-code)
-    (,pydoc-sections-re 0 'bold)
-    ("\\$[A-z0-9_]+" 0 font-lock-builtin-face)
-    ("``.+?``" 0 font-lock-builtin-face)
-    ("`.+?`" 0 font-lock-builtin-face)
-    ("\".+?\"" 0 font-lock-string-face)
-    ("'.+?'" 0 font-lock-string-face)
-    (,(regexp-opt (list "True" "False" "None") 'words)
-     1 font-lock-constant-face)))
 
-(defvar pydoc-mode-map
+(defun pydoc-linkify-classes ()
+  "Find class lines, and colorize and linkify them."
+  (goto-char (point-min))
+  ;; first match is class name, second match is optional super class
+  (while (re-search-forward "^\\s-+class \\(.*\\)(?\\(.*\\)?)?" nil t)
+    ;; colorize the class
+    (let ((map (make-sparse-keymap)))
+
+      ;; set file to be clickable to open the source
+      (define-key map [mouse-1]
+	`(lambda ()
+	   (interactive)
+	   (find-file ,pydoc-file)
+	   (goto-char (point-min))
+	   ;; this might be fragile if people put other spaces in
+	   (re-search-forward (format "^class %s\\b"  ,(match-string 1)))))
+
+      (set-text-properties
+       (match-beginning 1)
+       (match-end 1)
+       `(local-map, map
+		    face pydoc-class-name-link-face
+		    mouse-face pydoc-mouse-face
+		    help-echo "mouse-1: click to open")))
+
+    ;; colorize and link superclass
+    (let ((map (make-sparse-keymap)))
+
+      ;; we run pydoc on the superclass
+      (define-key map [mouse-1]
+	`(lambda ()
+	  (interactive)
+	  (pydoc ,(match-string 2))))
+
+      (set-text-properties
+       (match-beginning 2)
+       (match-end 2)
+       `(local-map, map
+		    face pydoc-superclass-name-link-face
+		    mouse-face pydoc-mouse-face
+		    help-echo
+		    (format "mouse-1: pydoc %s" ,(match-string 2)))))))
+
+
+(defun pydoc-linkify-data ()
+  "Find DATA block and then make links to entries.
+This is not perfect, as the data entries are not always in the file defined, e.g. when it is an __init__ file that imports *."
+  (goto-char (point-min))
+  (when (re-search-forward "^DATA" nil t)
+    (while (re-search-forward "\\([_A-Za-z0-9]*\\) =" nil t)
+      (let ((map (make-sparse-keymap))
+	    (start (match-beginning 1))
+	    (end (match-end 1))
+	    (token (match-string 1)))
+
+	(define-key map [mouse-1]
+	  `(lambda ()
+	     (interactive)
+	     (find-file ,pydoc-file)
+	     (goto-char (point-min))
+	     (re-search-forward
+	      (format "^%s" ,token nil t))))
+
+	(set-text-properties
+	 start end
+	 `(local-map, map
+		      face pydoc-data-face
+		      mouse-face pydoc-mouse-face
+		      help-echo (format "mouse-1: click to go to %s" ,token)))))))
+
+
+(defun pydoc-insert-back-link ()
+  "Insert link to next and previous pydoc buffers."
+  (goto-char (point-max))
   (let ((map (make-sparse-keymap)))
-    (define-key map "n" 'next-line)
-    (define-key map "N" 'forward-page)
-    (define-key map "p" 'previous-line)
-    (define-key map "P" 'backward-page)
-    (define-key map "f" 'forward-char)
-    (define-key map "b" 'backward-char)
-    (define-key map "F" 'forward-word)
-    (define-key map "B" 'backward-word)
-    (define-key map "o" 'occur)
-    (define-key map "s" 'isearch-forward)
-    (define-key map "j" 'pydoc-jump-to-section)
-    map)
-  "Keymap for Pydoc mode.")
+    (define-key map [mouse-1]
+      (lambda ()
+	(interactive)
+	(setq *pydoc-index* (mod (- *pydoc-index* 1) (length *pydoc-history*)))
+	(pydoc (elt *pydoc-history* *pydoc-index*))))
+    (insert
+     (propertize "[Back]"
+		 'local-map map
+		 'face 'pydoc-button-face
+		 'mouse-face 'pydoc-mouse-face
+		 'help-echo "mouse-1: click to return")))
 
-;;;###autoload
-(define-derived-mode pydoc-mode help-mode "Pydoc"
-  "Major mode for viewing pydoc output.
-Commands:
-\\{pydoc-mode-map}"
-  (set (make-local-variable 'font-lock-defaults)
-       '((pydoc-font-lock-keywords) t nil))
-  :keymap pydoc-mode-map)
+  (let ((map (make-sparse-keymap)))
+    (define-key map [mouse-1]
+      (lambda ()
+	(interactive)
+	(setq *pydoc-index* (mod (+ *pydoc-index* 1) (length *pydoc-history*)))
+	(pydoc (elt *pydoc-history* *pydoc-index*))))
+    (insert
+     (concat
+      "  "
+      (propertize "[Forward]"
+		  'local-map map
+		  'face 'pydoc-button-face
+		  'mouse-face 'pydoc-mouse-face
+		  'help-echo "mouse-1: click to return")))))
 
-(defun pydoc-mode-setup ()
-  (pydoc-mode)
-  (setq buffer-read-only nil))
 
-(defun pydoc-mode-finish ()
-  (when (derived-mode-p 'pydoc-mode)
-    (setq buffer-read-only t)
-    (pydoc-set-info)
-    (pydoc-make-xrefs (current-buffer))
-    (run-hooks 'pydoc-after-finish-hook)))
-
-(defmacro pydoc-with-help-window (buffer-name &rest body)
-  "Display buffer named BUFFER-NAME in a pydoc help window.
-This is the same as `with-help-window', except `pydoc-mode-setup'
-and `pydoc-mode-finish' are used instead of `help-mode-setup' and
-`help-mode-finish'."
-  (declare (indent 1) (debug t))
-  `(progn
-     ;; Make `help-window-point-marker' point nowhere.  The only place
-     ;; where this should be set to a buffer position is within BODY.
-     (set-marker help-window-point-marker nil)
-     (let ((temp-buffer-window-setup-hook
-            (cons 'pydoc-mode-setup temp-buffer-window-setup-hook))
-           (temp-buffer-window-show-hook
-            (cons 'pydoc-mode-finish temp-buffer-window-show-hook)))
-       (with-temp-buffer-window
-        ,buffer-name nil 'help-window-setup (progn ,@body)))))
-
-(defun pydoc-buffer ()
-  "Like `help-buffer', but for pydoc help buffers."
-  (buffer-name
-   (if (not help-xref-following)
-       (get-buffer-create "*pydoc*")
-     (unless (derived-mode-p 'help-mode)
-       (error "Current buffer is not in Pydoc mode"))
-     (current-buffer))))
-
-(defun pydoc-setup-xref (item interactive-p)
-  "Like `help-setup-xref', but for pydoc help buffers."
-  (with-current-buffer (pydoc-buffer)
-    (when help-xref-stack-item
-      (push (cons (point) help-xref-stack-item) help-xref-stack)
-      (setq help-xref-forward-stack nil))
-    (when interactive-p
-      (let ((tail (nthcdr 10 help-xref-stack)))
-        ;; Truncate the stack.
-        (if tail (setcdr tail nil))))
-    (setq help-xref-stack-item item)))
 
 (defun pydoc-builtin-modules ()
   "Return list of built in python modules."
@@ -525,19 +514,60 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
 
 ;;;###autoload
 (defun pydoc (name)
-  "Display pydoc information for NAME in `pydoc-buffer'."
-  (interactive
-   (list
-    (ido-completing-read
-     "Name of function or module:"
-     (pydoc-all-modules))))
+  "Display pydoc information for NAME in a buffer named *pydoc*."
+  (interactive "sName of function or module: ")
 
-  (pydoc-setup-xref (list #'pydoc name)
-                    (called-interactively-p 'interactive))
-  (pydoc-with-help-window (pydoc-buffer)
-    (call-process-shell-command (concat pydoc-command " " name)
-                                nil standard-output)))
+  (switch-to-buffer-other-window "*pydoc*")
+  (setq buffer-read-only nil)
+  (erase-buffer)
+  (insert (shell-command-to-string (format "python -m pydoc %s" name)))
+  (goto-char (point-min))
 
+  ;; store name at end of history if it is not in the history
+  ;; already. This isn't exactly a real history this way, since it
+  ;; won't add multiple instances, and revisiting a NAME will move you
+  ;; around in the history.
+  (add-to-list '*pydoc-history* name t)
+
+
+  ;; save
+  (when *pydoc-current*
+      (setq *pydoc-last* *pydoc-current*))
+  (setq *pydoc-current* name)
+
+  (make-local-variable 'pydoc-file)
+  (make-local-variable 'pydoc-name)
+
+  (save-excursion
+    (pydoc-get-name)
+    (goto-address-mode)
+    (pydoc-make-file-link)
+    (pydoc-make-package-links)
+    (pydoc-linkify-classes)
+    (pydoc-colorize-functions)
+    (pydoc-colorize-class-methods)
+    (pydoc-colorize-envvars)
+    (pydoc-colorize-strings)
+    (pydoc-linkify-sphinx-directives)
+    (pydoc-fontify-inline-code)
+    (pydoc-linkify-data)
+    (pydoc-insert-back-link))
+
+  ;; make read-only and press q to quit. add some navigation keys
+  (setq buffer-read-only t)
+  (use-local-map (copy-keymap text-mode-map))
+  (local-set-key "q" #'(lambda () (interactive) (quit-window t)))
+  (local-set-key "n" #'next-line)
+  (local-set-key "N" #'forward-page)
+  (local-set-key "p" #'previous-line)
+  (local-set-key "P" #'backward-page)
+  (local-set-key "f" #'forward-char)
+  (local-set-key "b" #'backward-char)
+  (local-set-key "F" #'forward-word)
+  (local-set-key "B" #'backward-word)
+  (local-set-key "o" #'(lambda () (interactive) (call-interactively 'occur)))
+  (local-set-key "s" #'isearch-forward)
+  (font-lock-mode))
 
 (provide 'pydoc)
 
