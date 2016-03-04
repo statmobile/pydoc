@@ -491,10 +491,46 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
         (if tail (setcdr tail nil))))
     (setq help-xref-stack-item item)))
 
+(defun pydoc-builtin-modules ()
+  "Return list of built in python modules."
+  (mapcar
+   'symbol-name
+   (read (shell-command-to-string "python -c \"import sys; print('({})'.format(' '.join(['\"{}\"'.format(x) for x in sys.builtin_module_names])))\""))))
+
+
+(defun pydoc-user-modules ()
+  "Return a list of strings for user-installed modules"
+  (mapcar
+   'symbol-name
+   (read
+    (shell-command-to-string
+     "python -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \""))))
+
+
+(defun pydoc-pkg-modules ()
+  "Return list of built in python modules."
+  (mapcar
+   'symbol-name
+   (read (shell-command-to-string "python -c \"import pkgutil; print('({})'.format(' '.join(['\"{}\"'.format(x[1]) for x in pkgutil.iter_modules()])))\""))))
+
+(defun pydoc-all-modules ()
+  "Alphabetically sorted list of all modules."
+  (sort
+   (append
+    (pydoc-builtin-modules)
+    (pydoc-user-modules)
+    (pydoc-pkg-modules))
+   'string<))
+
+
 ;;;###autoload
 (defun pydoc (name)
   "Display pydoc information for NAME in `pydoc-buffer'."
-  (interactive "sName of function or module: ")
+  (interactive
+   (list
+    (ido-completing-read
+     "Name of function or module:"
+     (pydoc-all-modules))))
 
   (pydoc-setup-xref (list #'pydoc name)
                     (called-interactively-p 'interactive))
