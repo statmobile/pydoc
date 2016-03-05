@@ -560,7 +560,7 @@ if len(gd) > 0:
 NAME
     {1}
 
-{2}'''.format(gd[0].full_name, gd[0].name, gd[0].raw_doc))"
+{2}'''.format(gd[0].full_name, gd[0].name, gd[0].docstring()))"
 				script
 				line
 				column
