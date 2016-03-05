@@ -538,6 +538,41 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
     (call-process-shell-command (concat pydoc-command " " name)
                                 nil standard-output)))
 
+;;;###autoload
+(defun pydoc-at-point ()
+  "Try to get help for thing at point.
+Requires the python package jedi to be installed.
+
+There is no way right now to get to the full module path. This is a known limitation in jedi."
+  (interactive)
+
+  (let* ((script (buffer-string))
+	 (line (line-number-at-pos))
+	 (column (current-column))
+	 (tfile (make-temp-file "py-"))
+	 (python-script (format "import jedi
+s = jedi.Script(\"\"\"%s\"\"\", %s, %s, path=\"%s\")
+gd = s.goto_definitions()
+
+if len(gd) > 0:
+    print('''Help on {0}:
+
+NAME
+    {1}
+
+{2}'''.format(gd[0].full_name, gd[0].name, gd[0].raw_doc))"
+				script
+				line
+				column
+				tfile)))
+
+    (pydoc-setup-xref (list #'pydoc (thing-at-point 'word))
+		      (called-interactively-p 'interactive))
+    (pydoc-with-help-window (pydoc-buffer)
+      (with-temp-file tfile
+	(insert python-script))
+      (call-process-shell-command (concat "python " tfile)
+				  nil standard-output))))
 
 (provide 'pydoc)
 
