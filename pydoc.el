@@ -450,26 +450,105 @@ These are lines marked by `pydoc-example-code-leader-re'."
 
 (defun pydoc-image-overlays (limit)
   "Put overlays on images up LIMIT.
-Matches org file links like [[/path/file.png]]"
+Matches org file links like [[/path/file.png]].
+Assumes Imagemagick is installed."
   (let ((re "\\[\\[\\(.*?\\.\\(?:png\\|PNG\\|jpg\\|JPG\\|jpeg\\|JPEG\\)\\)]]")
-	beg end imgfile rfile img)
-    (when (re-search-forward re limit t)
+	beg end imgfile rfile img cmd width)
+    (while (re-search-forward re limit t)
       (setq beg (match-beginning 0)
 	    end (match-end 0)
 	    imgfile (match-string 1)
 	    rfile (file-relative-name imgfile (file-name-directory pydoc-file)))
 
       (when (file-exists-p rfile)
-	(setq img (create-image (expand-file-name rfile) 'imagemagick nil :width 300))
+	(setq cmd (format
+		   "identify -format \"%%[fx:w]\" %s"
+		   rfile)
+	      width (min 400 (string-to-number (shell-command-to-string cmd))))
+	(setq img (create-image
+		   (expand-file-name rfile)
+		   'imagemagick nil
+		   :width width))
 	(setq ov (make-overlay beg end))
 	(overlay-put ov 'display img)
 	(overlay-put ov 'face 'default)
 	(overlay-put ov 'org-image-overlay t)))))
 
+;; Overlay images on LaTeX fragments. Note you need to escape some things in the
+;; python docstrings, e.g. \\f, \\b, \\\\, \\r, \\n
+
+(defun pydoc-latex-overlays-1 (limit)
+  "Overlay images on \(eqn\)."
+  (while (re-search-forward "\\\\([^ ]*?\\\\)" limit t)
+    (save-restriction
+      (save-excursion
+	(narrow-to-region (match-beginning 0) (match-end 0))
+	(goto-char (point-min))
+	(org-format-latex
+	 (concat temporary-file-directory org-latex-preview-ltxpng-directory "pydoc")
+	 default-directory 'overlays "" '()  'forbuffer
+	 org-latex-create-formula-image-program)))))
+
+
+(defun pydoc-latex-overlays-2 (limit)
+  "Overlay images on \[eqn\]."
+  (while (re-search-forward "\\\\\\[[^ ]*?\\\\\\]" limit t)
+    (save-restriction
+      (save-excursion
+	(narrow-to-region (match-beginning 0) (match-end 0))
+	(goto-char (point-min))
+	(org-format-latex
+	 (concat temporary-file-directory org-latex-preview-ltxpng-directory "pydoc")
+	 default-directory 'overlays "" '()  'forbuffer
+	 org-latex-create-formula-image-program)))))
+
+
+(defun pydoc-latex-overlays-3 (limit)
+  "Overlay images on $$eqn$$."
+  (while (re-search-forward "\\$\\$[^ ]*?\\$\\$" limit t)
+    (save-restriction
+      (save-excursion
+	(narrow-to-region (match-beginning 0) (match-end 0))
+	(goto-char (point-min))
+	(org-format-latex
+	 (concat temporary-file-directory org-latex-preview-ltxpng-directory "pydoc")
+	 default-directory 'overlays "" '()  'forbuffer
+	 org-latex-create-formula-image-program)))))
+
+
+(defun pydoc-latex-overlays-4 (limit)
+  "Overlay images on $eqn$.
+this is less robust than useing \(\)"
+  (while (re-search-forward "\\([^$]\\|^\\)\\(\\(\\$\\([^	\n,;.$][^$\n]*?\\(\n[^$\n]*?\\)\\{0,2\\}[^	\n,.$]\\)\\$\\)\\)\\([-	.,?;:'\") ]\\|$\\)" limit t)
+    (save-restriction
+      (save-excursion
+	(narrow-to-region (match-beginning 0) (match-end 0))
+	(goto-char (point-min))
+	(org-format-latex
+	 (concat temporary-file-directory org-latex-preview-ltxpng-directory "pydoc")
+	 default-directory 'overlays "" '()  'forbuffer
+	 org-latex-create-formula-image-program)))))
+
+
+(defun pydoc-latex-overlays-5 (limit)
+  "Overlay images on latex math environments."
+  (while (re-search-forward
+	  "^[ \\t]*\\(\\\\begin{\\([a-zA-Z0-9\\*]+\\)[^\\000]+?\\\\end{\\2}\\)" limit t)
+    (save-restriction
+      (save-excursion
+	(narrow-to-region (match-beginning 1) (match-end 1))
+	(goto-char (point-min))
+	(org-format-latex
+	 (concat temporary-file-directory org-latex-preview-ltxpng-directory "pydoc")
+	 default-directory 'overlays "" '()  'forbuffer
+	 org-latex-create-formula-image-program)))))
+
 
 (defvar pydoc-font-lock-keywords
   `((pydoc-fontify-inline-code)
-    (pydoc-image-overlays)
+    (org-activate-plain-links)
+    (org-activate-bracket-links)
+    (org-do-emphasis-faces)
     (,pydoc-sections-re 0 'bold)
     ("\\$[A-z0-9_]+" 0 font-lock-builtin-face)
     ("``.+?``" 0 font-lock-builtin-face)
@@ -493,8 +572,8 @@ Matches org file links like [[/path/file.png]]"
     (define-key map "o" 'occur)
     (define-key map "s" 'isearch-forward)
     (define-key map "j" 'pydoc-jump-to-section)
-    (define-key map "," (lambda () (interactive (help-xref-go-back (current-buffer)))))
-    (define-key map "." (lambda () (interactive (help-xref-go-forward (current-buffer)))))
+    (define-key map "," (lambda () (interactive) (help-xref-go-back (current-buffer))))
+    (define-key map "." (lambda () (interactive) (help-xref-go-forward (current-buffer))))
     map)
   "Keymap for Pydoc mode.")
 
@@ -516,9 +595,21 @@ Commands:
 
 (defun pydoc-mode-finish ()
   (when (derived-mode-p 'pydoc-mode)
-    (setq buffer-read-only t)
     (pydoc-set-info)
     (pydoc-make-xrefs (current-buffer))
+    ;; When the following is in font-lock, emacs tends to crash. So I put it
+    ;; here.
+    (setq buffer-read-only nil)
+    (save-excursion
+      (dolist (f '(pydoc-image-overlays
+		   pydoc-latex-overlays-1
+		   pydoc-latex-overlays-2
+		   pydoc-latex-overlays-3
+		   pydoc-latex-overlays-4
+		   pydoc-latex-overlays-5))
+	(goto-char (point-min))
+	(funcall f nil)))
+    (setq buffer-read-only t)
     (run-hooks 'pydoc-after-finish-hook)))
 
 
@@ -606,6 +697,7 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
   nil
   "Cached value of all modules.")
 
+
 (defun pydoc-all-modules ()
   "Alphabetically sorted list of all modules.
 Value is cached to speed up subsequent calls."
@@ -628,14 +720,14 @@ Value is cached to speed up subsequent calls."
   (interactive
    (list
     (ido-completing-read
-     "Name of function or module:"
+     "Name of function or module: "
      (pydoc-all-modules))))
 
   (pydoc-setup-xref (list #'pydoc name)
                     (called-interactively-p 'interactive))
   (pydoc-with-help-window (pydoc-buffer)
     (call-process-shell-command (concat pydoc-command " " name)
-                                nil standard-output)))
+				nil standard-output)))
 
 ;;;###autoload
 (defun pydoc-at-point ()
@@ -675,7 +767,8 @@ FILE
       (with-temp-file tfile
 	(insert python-script))
       (call-process-shell-command (concat "python " tfile)
-				  nil standard-output))))
+				  nil standard-output)
+      (delete-file tfile))))
 
 (provide 'pydoc)
 
