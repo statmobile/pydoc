@@ -4,27 +4,28 @@
 
 ;; Author: John Kitchin <jkitchin@andrew.cmu.edu>
 ;; Maintainer: Brian J. Lopes <statmobile@gmail.com>
+;; Contributions from Kyle Meyer
 ;; Created: 8 Mar 2015
-;; Version: 0.1
+;; Version: 0.2
 ;; Keywords: pydoc, python
 ;; Homepage: https://github.com/statmobile/pydoc
 
 ;;; Commentary:
 
-;; This module runs pydoc on an argument, inserts the output into a
-;; buffer, and then linkifies and colorizes the buffer. For example,
-;; some things are linked to open the source code, or to run pydoc on
-;; them. Some things are colorized for readability, e.g. environment
-;; variables and strings, function names and arguments.
+;; This module runs pydoc on an argument, inserts the output into a help buffer,
+;; and then linkifies and colorizes the buffer. For example, some things are
+;; linked to open the source code, or to run pydoc on them. Some things are
+;; colorized for readability, e.g. environment variables and strings, function
+;; names and arguments.
 ;;
 ;; https://github.com/statmobile/pydoc
 ;;
-;; There is one command. M-x pydoc
+;; There are two commands: M-x pydoc and M-x pydoc-at-point
 
 ;;; Changelog:
 ;;
 ;; Updated license and headers for release.
-
+;; March 2016: Major rewrite by Kyle Meyer to use help-buffers
 
 ;;; Code:
 
@@ -43,20 +44,24 @@
   :group 'external
   :group 'help)
 
+
 (defcustom pydoc-command "python -m pydoc"
   "The command to use to run pydoc."
   :type 'string
   :group 'pydoc)
+
 
 (defcustom pydoc-make-method-buttons t
   "If non-nil, create buttons for methods."
   :type 'boolean
   :group 'pydoc)
 
+
 (defcustom pydoc-after-finish-hook nil
   "Hook run by after pydoc buffer is prepared."
   :type 'hook
   :group 'pydoc)
+
 
 (defface pydoc-example-leader-face
   '((t (:inherit font-lock-doc-face)))
@@ -64,11 +69,23 @@
 
 
 ;;; Buttons
+(defun pydoc-find-file-other-window (fname)
+  "Open FNAME in other window.
+FNAME may end in ::line-number, in which case it also goes to the
+line."
+  (interactive)
+  (if (not (string-match "::" fname))
+      (find-file-other-window fname)
+    (let ((fields (split-string fname "::")))
+      (find-file-other-window (car fields))
+      (goto-line (string-to-number (nth 1 fields))))))
 
 (define-button-type 'pydoc-source
   :supertype 'help-xref
-  'help-function 'find-file-other-window
+  ;; 'help-function 'find-file-other-window
+  'help-function 'pydoc-find-file-other-window
   'help-echo (purecopy "mouse-2, RET: visit file"))
+
 
 (define-button-type 'pydoc-source-search
   :supertype 'help-xref
@@ -78,6 +95,7 @@
                    (re-search-forward search nil t)
                    (beginning-of-line))
   'help-echo (purecopy "mouse-2, RET: view in source"))
+
 
 (define-button-type 'pydoc-help
   :supertype 'help-xref
@@ -95,12 +113,14 @@
       line-end)
   "Regular expression matching top-level pydoc sections.")
 
+
 (defvar pydoc-file nil
   "File associated with the current pydoc buffer.
-The help for modules and packages have a \"FILE\" section (unless
+The help for modules and packages has a \"FILE\" section (unless
 they are built-in module like `sys`).")
 (put 'pydoc-file 'permanent-local t)
 (make-variable-buffer-local 'pydoc-file)
+
 
 (defvar pydoc-info nil
   "Plist with information about the current pydoc buffer.
@@ -142,12 +162,14 @@ Keys include
 (put 'pydoc-info'permanent-local t)
 (make-variable-buffer-local 'pydoc-info)
 
+
 (defun pydoc-set-info ()
   "Set up `pydoc-info'for the current pydoc buffer."
   (setq pydoc-info (pydoc-get-info))
   (setq pydoc-info
         (plist-put pydoc-info
                    :sections (pydoc-get-sections))))
+
 
 (defun pydoc-get-info ()
   "Return help name and type for the current pydoc buffer.
@@ -201,6 +223,7 @@ See `pydoc-info' for more details on the keys."
      (t
       (list :type 'unknown)))))
 
+
 (defun pydoc-get-sections ()
   "Return sections of the current pydoc buffer.
 An alist of (section . position) cells is returned, where
@@ -221,6 +244,7 @@ An alist of (section . position) cells is returned, where
               sections))
       sections)))
 
+
 (defun pydoc-jump-to-section (section)
   "Jump to pydoc SECTION."
   (interactive
@@ -230,10 +254,12 @@ An alist of (section . position) cells is returned, where
     (when start
       (goto-char start))))
 
+
 (defun pydoc--section-start (section)
   "Return start position for SECTION.
 Value is obtained from buffer-local `pydoc-info'."
   (car (cdr (assoc section (plist-get pydoc-info :sections)))))
+
 
 (defmacro pydoc--with-section (section regexp &rest body)
   "Perform REGEXP search within SECTION.
@@ -247,8 +273,9 @@ Execute BODY for each sucessful search."
          (while (re-search-forward ,regexp (cdr section-pos) t)
            ,@body)))))
 
-;; This is the pydoc version of `help-make-xrefs'.
+
 (defun pydoc-make-xrefs (&optional buffer)
+  "This is the pydoc version of `help-make-xrefs'."
   (with-current-buffer (or buffer (current-buffer))
     (save-excursion
       (goto-char (point-min))
@@ -278,7 +305,10 @@ Execute BODY for each sucessful search."
              (pydoc--buttonize-classes pydoc-file)
              (when pydoc-make-method-buttons
                (pydoc--buttonize-methods pydoc-file))
-             (pydoc--buttonize-data pydoc-file))))
+             (pydoc--buttonize-data pydoc-file)))
+	  ;; When I use `pydoc-at-point' the type here is unknown.
+	  (unknown
+	   (pydoc--buttonize-file)))
         (pydoc--buttonize-urls)
         (pydoc--buttonize-sphinx)
         ;; Delete extraneous newlines at the end of the docstring
@@ -289,10 +319,12 @@ Execute BODY for each sucessful search."
         (pydoc--insert-navigation-links)
         (set-buffer-modified-p old-modified)))))
 
+
 (defun pydoc--buttonize-help-list (&optional limit)
   (save-excursion
     (while (re-search-forward "\\b\\w+\\b" limit t)
       (help-xref-button 0 'pydoc-help (match-string 0)))))
+
 
 (defun pydoc--buttonize-related-topics ()
   (save-excursion
@@ -302,6 +334,7 @@ Execute BODY for each sucessful search."
       (let ((line-end (point-at-eol)))
         (while (re-search-forward ",\\s-*\\(\\w+\\)" line-end t)
           (help-xref-button 1 'pydoc-help (match-string 1)))))))
+
 
 ;; This is taken from `help-make-xrefs'.
 (defun pydoc--insert-navigation-links ()
@@ -320,6 +353,7 @@ Execute BODY for each sucessful search."
   (when (or help-xref-stack help-xref-forward-stack)
     (insert "\n")))
 
+
 (defun pydoc--buttonize-file ()
   (let ((file-pos (pydoc--section-start "file")))
     (when file-pos
@@ -327,14 +361,15 @@ Execute BODY for each sucessful search."
         (goto-char file-pos)
         (looking-at "^FILE\n    \\(.+\\)$")
         (let ((file (match-string-no-properties 1)))
-          (when (file-exists-p file)    ; This may be "(built-in)".
-            (setq pydoc-file file)
-            (help-xref-button 1 'pydoc-source pydoc-file)))))))
+	  (setq pydoc-file file)
+	  (help-xref-button 1 'pydoc-source pydoc-file))))))
+
 
 (defun pydoc--buttonize-urls ()
   (save-excursion
     (while (re-search-forward goto-address-url-regexp nil t)
       (help-xref-button 0 'help-url (match-string 0)))))
+
 
 (defun pydoc--buttonize-functions (file)
   (pydoc--with-section "functions"
@@ -342,6 +377,7 @@ Execute BODY for each sucessful search."
     (let* ((func (match-string 1))
            (search (format "def %s(" func)))
       (help-xref-button 1 'pydoc-source-search file search))))
+
 
 (defun pydoc--buttonize-classes (file)
   (pydoc--with-section "classes"
@@ -354,6 +390,7 @@ Execute BODY for each sucessful search."
       (when superclass
         (help-xref-button 2 'pydoc-help superclass)))))
 
+
 (defun pydoc--buttonize-methods (file)
   (pydoc--with-section "classes"
       "^     |  \\([a-zA-Z0-9_]*\\)(\\(.*\\))$"
@@ -362,10 +399,12 @@ Execute BODY for each sucessful search."
            (search (format "def %s(" meth)))
       (help-xref-button 1 'pydoc-source-search file search))))
 
+
 (defun pydoc--buttonize-data (file)
   (pydoc--with-section "data"
       "^    \\([_A-Za-z0-9]+\\) ="
     (help-xref-button 1 'pydoc-source-search file (match-string 1))))
+
 
 (defun pydoc--buttonize-sphinx ()
   (save-excursion
@@ -373,6 +412,7 @@ Execute BODY for each sucessful search."
     (while (re-search-forward ":\\(class\\|func\\|mod\\):`~?\\([^`]*\\)`" nil t)
       (let ((name (match-string 2)))
         (help-xref-button 2 'pydoc-help name)))))
+
 
 (defun pydoc--buttonize-package-contents (pkg-name)
   (pydoc--with-section "package contents"
@@ -396,6 +436,7 @@ Execute BODY for each sucessful search."
 This will be use to highlight line with Python syntax
 highlightling.")
 
+
 (defun pydoc-fontify-inline-code (limit)
   "Fontify example blocks up to LIMIT.
 These are lines marked by `pydoc-example-code-leader-re'."
@@ -405,6 +446,7 @@ These are lines marked by `pydoc-example-code-leader-re'."
     (org-src-font-lock-fontify-block
      "python" (match-beginning 2) (match-end 2))
     t))
+
 
 (defvar pydoc-font-lock-keywords
   `((pydoc-fontify-inline-code)
@@ -416,6 +458,7 @@ These are lines marked by `pydoc-example-code-leader-re'."
     ("'.+?'" 0 font-lock-string-face)
     (,(regexp-opt (list "True" "False" "None") 'words)
      1 font-lock-constant-face)))
+
 
 (defvar pydoc-mode-map
   (let ((map (make-sparse-keymap)))
@@ -430,8 +473,11 @@ These are lines marked by `pydoc-example-code-leader-re'."
     (define-key map "o" 'occur)
     (define-key map "s" 'isearch-forward)
     (define-key map "j" 'pydoc-jump-to-section)
+    (define-key map "," (lambda () (interactive (help-xref-go-back))) )
+    (define-key map "." (lambda () (interactive (help-xref-go-forward))))
     map)
   "Keymap for Pydoc mode.")
+
 
 ;;;###autoload
 (define-derived-mode pydoc-mode help-mode "Pydoc"
@@ -442,9 +488,11 @@ Commands:
        '((pydoc-font-lock-keywords) t nil))
   :keymap pydoc-mode-map)
 
+
 (defun pydoc-mode-setup ()
   (pydoc-mode)
   (setq buffer-read-only nil))
+
 
 (defun pydoc-mode-finish ()
   (when (derived-mode-p 'pydoc-mode)
@@ -452,6 +500,7 @@ Commands:
     (pydoc-set-info)
     (pydoc-make-xrefs (current-buffer))
     (run-hooks 'pydoc-after-finish-hook)))
+
 
 (defmacro pydoc-with-help-window (buffer-name &rest body)
   "Display buffer named BUFFER-NAME in a pydoc help window.
@@ -470,6 +519,7 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
        (with-temp-buffer-window
         ,buffer-name nil 'help-window-setup (progn ,@body)))))
 
+
 (defun pydoc-buffer ()
   "Like `help-buffer', but for pydoc help buffers."
   (buffer-name
@@ -478,6 +528,7 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
      (unless (derived-mode-p 'help-mode)
        (error "Current buffer is not in Pydoc mode"))
      (current-buffer))))
+
 
 (defun pydoc-setup-xref (item interactive-p)
   "Like `help-setup-xref', but for pydoc help buffers."
@@ -491,6 +542,7 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
         (if tail (setcdr tail nil))))
     (setq help-xref-stack-item item)))
 
+
 (defun pydoc-builtin-modules ()
   "Return list of built in python modules."
   (mapcar
@@ -499,7 +551,7 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
 
 
 (defun pydoc-user-modules ()
-  "Return a list of strings for user-installed modules"
+  "Return a list of strings for user-installed modules."
   (mapcar
    'symbol-name
    (read
@@ -513,14 +565,41 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
    'symbol-name
    (read (shell-command-to-string "python -c \"import pkgutil; print('({})'.format(' '.join(['\"{}\"'.format(x[1]) for x in pkgutil.iter_modules()])))\""))))
 
+
+(defun pydoc-topics ()
+  "List of topics from the shell-command `pydoc topics`."
+  (apply
+   'append
+   (mapcar (lambda (x) (split-string x " " t " "))
+	   (cdr (split-string  (shell-command-to-string "pydoc topics") "\n" t " ")))))
+
+
+(defun pydoc-keywords ()
+  "List of topics from the shell-command `pydoc keywords`."
+  (apply
+   'append
+   (mapcar (lambda (x) (split-string x " " t " "))
+	   (cdr (split-string  (shell-command-to-string "pydoc keywords") "\n" t " ")))))
+
+
+(defvar *pydoc-all-modules*
+  nil
+  "Cached value of all modules.")
+
 (defun pydoc-all-modules ()
-  "Alphabetically sorted list of all modules."
-  (sort
-   (append
-    (pydoc-builtin-modules)
-    (pydoc-user-modules)
-    (pydoc-pkg-modules))
-   'string<))
+  "Alphabetically sorted list of all modules.
+Value is cached to speed up subsequent calls."
+  (if *pydoc-all-modules*
+      *pydoc-all-modules*
+    (setq *pydoc-all-modules*
+	  (sort
+	   (append
+	    (pydoc-topics)
+	    (pydoc-keywords)
+	    (pydoc-builtin-modules)
+	    (pydoc-user-modules)
+	    (pydoc-pkg-modules))
+	   'string<))))
 
 
 ;;;###autoload
@@ -558,9 +637,12 @@ if len(gd) > 0:
     print('''Help on {0}:
 
 NAME
-    {1}
+    {3}
 
-{2}'''.format(gd[0].full_name, gd[0].name, gd[0].docstring()))"
+{4}
+
+FILE
+    {1}::{2}'''.format(gd[0].full_name, gd[0].module_path, gd[0].line, gd[0].name, gd[0].docstring()))"
 				script
 				line
 				column
@@ -568,6 +650,7 @@ NAME
 
     (pydoc-setup-xref (list #'pydoc (thing-at-point 'word))
 		      (called-interactively-p 'interactive))
+
     (pydoc-with-help-window (pydoc-buffer)
       (with-temp-file tfile
 	(insert python-script))
