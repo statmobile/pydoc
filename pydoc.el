@@ -448,8 +448,28 @@ These are lines marked by `pydoc-example-code-leader-re'."
     t))
 
 
+(defun pydoc-image-overlays (limit)
+  "Put overlays on images up LIMIT.
+Matches org file links like [[/path/file.png]]"
+  (let ((re "\\[\\[\\(.*?\\.\\(?:png\\|PNG\\|jpg\\|JPG\\|jpeg\\|JPEG\\)\\)]]")
+	beg end imgfile rfile img)
+    (when (re-search-forward re limit t)
+      (setq beg (match-beginning 0)
+	    end (match-end 0)
+	    imgfile (match-string 1)
+	    rfile (file-relative-name imgfile (file-name-directory pydoc-file)))
+
+      (when (file-exists-p rfile)
+	(setq img (create-image (expand-file-name rfile) 'imagemagick nil :width 300))
+	(setq ov (make-overlay beg end))
+	(overlay-put ov 'display img)
+	(overlay-put ov 'face 'default)
+	(overlay-put ov 'org-image-overlay t)))))
+
+
 (defvar pydoc-font-lock-keywords
   `((pydoc-fontify-inline-code)
+    (pydoc-image-overlays)
     (,pydoc-sections-re 0 'bold)
     ("\\$[A-z0-9_]+" 0 font-lock-builtin-face)
     ("``.+?``" 0 font-lock-builtin-face)
@@ -473,8 +493,8 @@ These are lines marked by `pydoc-example-code-leader-re'."
     (define-key map "o" 'occur)
     (define-key map "s" 'isearch-forward)
     (define-key map "j" 'pydoc-jump-to-section)
-    (define-key map "," (lambda () (interactive (help-xref-go-back))) )
-    (define-key map "." (lambda () (interactive (help-xref-go-forward))))
+    (define-key map "," (lambda () (interactive (help-xref-go-back (current-buffer)))))
+    (define-key map "." (lambda () (interactive (help-xref-go-forward (current-buffer)))))
     map)
   "Keymap for Pydoc mode.")
 
