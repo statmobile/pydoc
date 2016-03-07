@@ -448,32 +448,6 @@ These are lines marked by `pydoc-example-code-leader-re'."
     t))
 
 
-(defun pydoc-image-overlays (limit)
-  "Put overlays on images up LIMIT.
-Matches org file links like [[/path/file.png]].
-Assumes Imagemagick is installed."
-  (let ((re "\\[\\[\\(.*?\\.\\(?:png\\|PNG\\|jpg\\|JPG\\|jpeg\\|JPEG\\)\\)]]")
-	beg end imgfile rfile img cmd width)
-    (while (re-search-forward re limit t)
-      (setq beg (match-beginning 0)
-	    end (match-end 0)
-	    imgfile (match-string 1)
-	    rfile (file-relative-name imgfile (file-name-directory pydoc-file)))
-
-      (when (file-exists-p rfile)
-	(setq cmd (format
-		   "identify -format \"%%[fx:w]\" %s"
-		   rfile)
-	      width (min 400 (string-to-number (shell-command-to-string cmd))))
-	(setq img (create-image
-		   (expand-file-name rfile)
-		   'imagemagick nil
-		   :width width))
-	(setq ov (make-overlay beg end))
-	(overlay-put ov 'display img)
-	(overlay-put ov 'face 'default)
-	(overlay-put ov 'org-image-overlay t)))))
-
 ;; Overlay images on LaTeX fragments. Note you need to escape some things in the
 ;; python docstrings, e.g. \\f, \\b, \\\\, \\r, \\n
 
@@ -601,12 +575,13 @@ Commands:
     ;; here.
     (setq buffer-read-only nil)
     (save-excursion
-      (dolist (f '(pydoc-image-overlays
+      (dolist (f '(;; pydoc-image-overlays
 		   pydoc-latex-overlays-1
 		   pydoc-latex-overlays-2
 		   pydoc-latex-overlays-3
 		   pydoc-latex-overlays-4
-		   pydoc-latex-overlays-5))
+		   pydoc-latex-overlays-5
+		   org-display-inline-images))
 	(goto-char (point-min))
 	(funcall f nil)))
     (setq buffer-read-only t)
@@ -736,7 +711,6 @@ Requires the python package jedi to be installed.
 
 There is no way right now to get to the full module path. This is a known limitation in jedi."
   (interactive)
-
   (let* ((script (buffer-string))
 	 (line (line-number-at-pos))
 	 (column (current-column))
@@ -769,6 +743,11 @@ FILE
       (call-process-shell-command (concat "python " tfile)
 				  nil standard-output)
       (delete-file tfile))))
+
+;;;###autoload
+(defun pydoc-browse ()
+  (interactive)
+  (shell-command "pydoc -b &"))
 
 (provide 'pydoc)
 
