@@ -121,7 +121,7 @@ line."
        (one-or-more (any upper))
        (zero-or-more (and (any space) (one-or-more (any upper)))))
       line-end)
-  "Regular expression matching top-level pydoc sections.")
+  "Regular expression matching top level pydoc sections.")
 
 
 (defvar pydoc-file nil
@@ -272,7 +272,7 @@ Value is obtained from buffer-local `pydoc-info'."
 
 
 (defmacro pydoc--with-section (section regexp &rest body)
-  "Perform REGEXP search within SECTION.
+  "Within SECTION gerform REGEXP search.
 Execute BODY for each sucessful search."
   (declare (indent 2))
   `(let* ((section-pos (cdr (assoc ,section (plist-get pydoc-info :sections))))
@@ -285,7 +285,8 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc-make-xrefs (&optional buffer)
-  "This is the pydoc version of `help-make-xrefs'."
+  "This is the pydoc version of `help-make-xrefs'.
+Optional argument BUFFER which is used if provided."
   (with-current-buffer (or buffer (current-buffer))
     (save-excursion
       (goto-char (point-min))
@@ -318,7 +319,8 @@ Execute BODY for each sucessful search."
              (pydoc--buttonize-data pydoc-file)))
 	  ;; When I use `pydoc-at-point' the type here is unknown.
 	  (unknown
-	   (pydoc--buttonize-file)))
+	   (pydoc--buttonize-file)
+	   (pydoc--buttonize-other)))
         (pydoc--buttonize-urls)
         (pydoc--buttonize-sphinx)
         ;; Delete extraneous newlines at the end of the docstring
@@ -332,12 +334,14 @@ Execute BODY for each sucessful search."
 
 ;;** Buttonize functions
 (defun pydoc--buttonize-help-list (&optional limit)
+  "Buttonize the help list up to LIMIT."
   (save-excursion
     (while (re-search-forward "\\b\\w+\\b" limit t)
       (help-xref-button 0 'pydoc-help (match-string 0)))))
 
 
 (defun pydoc--buttonize-related-topics ()
+  "Buttonize related topics."
   (save-excursion
     (when (re-search-forward "^Related help topics: \\(\\w+\\)"
                              nil t)
@@ -346,9 +350,19 @@ Execute BODY for each sucessful search."
         (while (re-search-forward ",\\s-*\\(\\w+\\)" line-end t)
           (help-xref-button 1 'pydoc-help (match-string 1)))))))
 
+(defun pydoc--buttonize-other ()
+  "Buttonize the OTHER section.
+This section is unique to `pydoc-at-point' output."
+  (save-excursion
+    (goto-char (point-min))
+    (when (re-search-forward "^OTHER MODULES IN THIS FILE" (point-max) t)
+      (while (re-search-forward "    \\(.*\\)$" nil t)
+	(help-xref-button 1 'pydoc-help (match-string 1))))))
 
-;; This is taken from `help-make-xrefs'.
+
 (defun pydoc--insert-navigation-links ()
+  "Insert navigation links.
+Adapted from `help-make-xrefs'."
   (when (or help-xref-stack help-xref-forward-stack)
     (insert "\n"))
   ;; Make a back-reference in this buffer if appropriate.
@@ -366,6 +380,7 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc--buttonize-file ()
+  "Buttonize the file section."
   (let ((file-pos (pydoc--section-start "file")))
     (when file-pos
       (save-excursion
@@ -377,12 +392,14 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc--buttonize-urls ()
+  "Buttonize URLs."
   (save-excursion
     (while (re-search-forward goto-address-url-regexp nil t)
       (help-xref-button 0 'help-url (match-string 0)))))
 
 
 (defun pydoc--buttonize-functions (file)
+  "Buttonize functions for FILE."
   (pydoc--with-section "functions"
       "^\\s-+\\([_a-zA-z0-9]+\\)("
     (let* ((func (match-string 1))
@@ -391,6 +408,7 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc--buttonize-classes (file)
+  "Buttonize classes for FILE."
   (pydoc--with-section "classes"
       "    class \\([_A-z0-9]+\\)\\(?:(\\(.*\\))\\)*"
     (let* ((class (match-string 1))
@@ -403,6 +421,7 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc--buttonize-methods (file)
+  "Buttonize methods in the class section for FILE."
   (pydoc--with-section "classes"
       "^     |  \\([a-zA-Z0-9_]*\\)(\\(.*\\))$"
     ;; TODO This is not specific for the class it is under.
@@ -412,12 +431,14 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc--buttonize-data (file)
+  "Buttonize python data for FILE."
   (pydoc--with-section "data"
       "^    \\([_A-Za-z0-9]+\\) ="
     (help-xref-button 1 'pydoc-source-search file (match-string 1))))
 
 
 (defun pydoc--buttonize-sphinx ()
+  "Buttonize Sphinx markup."
   (save-excursion
     ;; TODO Add method?
     (while (re-search-forward ":\\(class\\|func\\|mod\\):`~?\\([^`]*\\)`" nil t)
@@ -426,6 +447,7 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc--buttonize-package-contents (pkg-name)
+  "Buttonize package contents for PKG-NAME."
   (pydoc--with-section "package contents"
       "^    \\([a-zA-Z0-9_-]*\\)[ ]?\\((package)\\)?$"
     (let ((package (concat pkg-name "." (match-string 1))))
@@ -457,7 +479,7 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc-topics ()
-  "List of topics from the shell-command `pydoc topics`."
+  "List of topics from the shell command `pydoc topics`."
   (apply
    'append
    (mapcar (lambda (x) (split-string x " " t " "))
@@ -465,7 +487,7 @@ Execute BODY for each sucessful search."
 
 
 (defun pydoc-keywords ()
-  "List of topics from the shell-command `pydoc keywords`."
+  "List of topics from the shell command `pydoc keywords`."
   (apply
    'append
    (mapcar (lambda (x) (split-string x " " t " "))
@@ -526,7 +548,7 @@ These are lines marked by `pydoc-example-code-leader-re'."
 ;; python docstrings, e.g. \\f, \\b, \\\\, \\r, \\n
 
 (defun pydoc-latex-overlays-1 (limit)
-  "Overlay images on \(eqn\)."
+  "Overlay images on \(eqn\) up to LIMIT."
   (while (re-search-forward "\\\\([^ ]*?\\\\)" limit t)
     (save-restriction
       (save-excursion
@@ -539,7 +561,7 @@ These are lines marked by `pydoc-example-code-leader-re'."
 
 
 (defun pydoc-latex-overlays-2 (limit)
-  "Overlay images on \[eqn\]."
+  "Overlay images on \[eqn\] up to LIMIT."
   (while (re-search-forward "\\\\\\[[^ ]*?\\\\\\]" limit t)
     (save-restriction
       (save-excursion
@@ -552,7 +574,7 @@ These are lines marked by `pydoc-example-code-leader-re'."
 
 
 (defun pydoc-latex-overlays-3 (limit)
-  "Overlay images on $$eqn$$."
+  "Overlay images on $$eqn$$ up to LIMIT."
   (while (re-search-forward "\\$\\$[^ ]*?\\$\\$" limit t)
     (save-restriction
       (save-excursion
@@ -565,7 +587,7 @@ These are lines marked by `pydoc-example-code-leader-re'."
 
 
 (defun pydoc-latex-overlays-4 (limit)
-  "Overlay images on $eqn$.
+  "Overlay images on $eqn$ up to LIMIT.
 this is less robust than useing \(\)"
   (while (re-search-forward "\\([^$]\\|^\\)\\(\\(\\$\\([^	\n,;.$][^$\n]*?\\(\n[^$\n]*?\\)\\{0,2\\}[^	\n,.$]\\)\\$\\)\\)\\([-	.,?;:'\") ]\\|$\\)" limit t)
     (save-restriction
@@ -579,9 +601,10 @@ this is less robust than useing \(\)"
 
 
 (defun pydoc-latex-overlays-5 (limit)
-  "Overlay images on latex math environments."
+  "Overlay images on latex math environments up to LIMIT."
   (while (re-search-forward
-	  "^[ \\t]*\\(\\\\begin{\\([a-zA-Z0-9\\*]+\\)[^\\000]+?\\\\end{\\2}\\)" limit t)
+	  "^[ \\t]*\\(\\\\begin{\\([a-zA-Z0-9\\*]+\\)[^\\000]+?\\\\end{\\2}\\)"
+	  limit t)
     (save-restriction
       (save-excursion
 	(narrow-to-region (match-beginning 1) (match-end 1))
@@ -604,14 +627,16 @@ this is less robust than useing \(\)"
     ("\".+?\"" 0 font-lock-string-face)
     ("'.+?'" 0 font-lock-string-face)
     (,(regexp-opt (list "True" "False" "None") 'words)
-     1 font-lock-constant-face)))
+     1 font-lock-constant-face))
+  "Font-lock keywords for pydoc.")
 
 
 ;;* pydoc buffer setup
 (defmacro pydoc-with-help-window (buffer-name &rest body)
   "Display buffer named BUFFER-NAME in a pydoc help window.
-This is the same as `with-help-window', except `pydoc-mode-setup'
-and `pydoc-mode-finish' are used instead of `help-mode-setup' and
+Execute BODY in the buffer. This is the same as
+`with-help-window', except `pydoc-mode-setup' and
+`pydoc-mode-finish' are used instead of `help-mode-setup' and
 `help-mode-finish'."
   (declare (indent 1) (debug t))
   `(progn
@@ -637,7 +662,8 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
 
 
 (defun pydoc-setup-xref (item interactive-p)
-  "Like `help-setup-xref', but for pydoc help buffers."
+  "Like `help-setup-xref', but for pydoc help buffers.
+See `help-setup-xref' for ITEM and INTERACTIVE-P documentation."
   (with-current-buffer (pydoc-buffer)
     (when help-xref-stack-item
       (push (cons (point) help-xref-stack-item) help-xref-stack)
@@ -679,11 +705,13 @@ Commands:
 
 
 (defun pydoc-mode-setup ()
+  "Used in place of `help-mode-setup' in `pydoc-with-help-window'."
   (pydoc-mode)
   (setq buffer-read-only nil))
 
 
 (defun pydoc-mode-finish ()
+  "Used in place of `help-mode-finish' in `pydoc-with-help-window'."
   (when (derived-mode-p 'pydoc-mode)
     (pydoc-set-info)
     (pydoc-make-xrefs (current-buffer))
@@ -705,20 +733,19 @@ Commands:
 
 ;;* The pydoc functions
 ;;;###autoload
-(defun pydoc (&optional arg)
-  "Display pydoc information in `pydoc-buffer'.
-You will be prompted for a module/class/function.
-with ARG reread all available Python modules."
-  (interactive "P")
-  (let ((name (ido-completing-read
-	       "Name of function or module: "
-	       (pydoc-all-modules arg))))
-
-    (pydoc-setup-xref (list #'pydoc name)
-		      (called-interactively-p 'interactive))
-    (pydoc-with-help-window (pydoc-buffer)
-      (call-process-shell-command (concat pydoc-command " " name)
-				  nil standard-output))))
+(defun pydoc (name)
+  "Display pydoc information for NAME in `pydoc-buffer'.
+Completion is provided with candidates from `pydoc-all-modules'.
+This is cached for speed. Use a prefix arg to refresh it."
+  (interactive
+   (list (ido-completing-read
+	  "Name of function or module: "
+	  (pydoc-all-modules current-prefix-arg))))
+  (pydoc-setup-xref (list #'pydoc name)
+		    (called-interactively-p 'interactive))
+  (pydoc-with-help-window (pydoc-buffer)
+    (call-process-shell-command (concat pydoc-command " " name)
+				nil standard-output)))
 
 ;;;###autoload
 (defun pydoc-at-point ()
@@ -738,6 +765,12 @@ s = jedi.Script(\"\"\"%s\"\"\", %s, %s, path=\"%s\")
 gd = s.goto_definitions()
 
 if len(gd) > 0:
+    script_modules = gd[0]._evaluator.modules
+    if len(script_modules) > 0:
+        related = '\\n    '.join([smod for smod in script_modules if 'py-' not in smod])
+    else:
+        related = None
+
     print('''Help on {0}:
 
 NAME
@@ -746,7 +779,11 @@ NAME
 {4}
 
 FILE
-    {1}::{2}'''.format(gd[0].full_name, gd[0].module_path, gd[0].line, gd[0].name, gd[0].docstring()))"
+    {1}::{2}
+
+OTHER MODULES IN THIS FILE
+    {5}
+'''.format(gd[0].full_name, gd[0].module_path, gd[0].line, gd[0].name, gd[0].docstring(), related))"
 	   ;; I found I need to quote double quotes so they
 	   ;; work in the script above.
 	   (replace-regexp-in-string "\"" "\\\\\"" script)
