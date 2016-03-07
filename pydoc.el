@@ -20,7 +20,18 @@
 ;;
 ;; https://github.com/statmobile/pydoc
 ;;
-;; There are two commands: M-x pydoc and M-x pydoc-at-point
+;; pydoc.el provides the following functions.
+;; `pydoc' Run this anywhere, and enter the module/class/function you want documentation for
+;; `pydoc-at-point' Run this in a Python script to see what doc jedi can find for the point
+;; `pydoc-browse' Launches a web browser with documentation.
+;; `pydoc-browse-kill' kills the pydoc web server.
+;;
+;; `pydoc' renders some Sphinx markup as links. Images are shown as overlays.
+;;  Most org-links should be active.
+;;
+;; LaTeX fragments are shown with org-rendered overlays. ;; Note you need to
+;; escape some things in the python docstrings, e.g. \\f, \\b, \\\\, \\r, \\n or
+;; they will not render correctly.
 
 ;;; Changelog:
 ;;
@@ -36,7 +47,7 @@
 (require 'org)
 
 
-;;; Options
+;;* Options
 
 (defgroup pydoc nil
   "Help buffer for pydoc."
@@ -68,12 +79,11 @@
   "Face used to highlight code example leader (e.g., \">>>\").")
 
 
-;;; Buttons
+;;* Buttons
 (defun pydoc-find-file-other-window (fname)
   "Open FNAME in other window.
 FNAME may end in ::line-number, in which case it also goes to the
 line."
-  (interactive)
   (if (not (string-match "::" fname))
       (find-file-other-window fname)
     (let ((fields (split-string fname "::")))
@@ -103,7 +113,7 @@ line."
   'help-echo (purecopy "mouse-2, RET: view pydoc help"))
 
 
-;;; Buffer information
+;;* Buffer information
 
 (defconst pydoc-sections-re
   (rx line-start
@@ -320,6 +330,7 @@ Execute BODY for each sucessful search."
         (set-buffer-modified-p old-modified)))))
 
 
+;;** Buttonize functions
 (defun pydoc--buttonize-help-list (&optional limit)
   (save-excursion
     (while (re-search-forward "\\b\\w+\\b" limit t)
@@ -421,8 +432,70 @@ Execute BODY for each sucessful search."
       (help-xref-button 1 'pydoc-help package))))
 
 
-;;; Mode
+;;* Python information
+(defun pydoc-builtin-modules ()
+  "Return list of built in python modules."
+  (mapcar
+   'symbol-name
+   (read (shell-command-to-string "python -c \"import sys; print('({})'.format(' '.join(['\"{}\"'.format(x) for x in sys.builtin_module_names])))\""))))
 
+
+(defun pydoc-user-modules ()
+  "Return a list of strings for user-installed modules."
+  (mapcar
+   'symbol-name
+   (read
+    (shell-command-to-string
+     "python -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \""))))
+
+
+(defun pydoc-pkg-modules ()
+  "Return list of built in python modules."
+  (mapcar
+   'symbol-name
+   (read (shell-command-to-string "python -c \"import pkgutil; print('({})'.format(' '.join(['\"{}\"'.format(x[1]) for x in pkgutil.iter_modules()])))\""))))
+
+
+(defun pydoc-topics ()
+  "List of topics from the shell-command `pydoc topics`."
+  (apply
+   'append
+   (mapcar (lambda (x) (split-string x " " t " "))
+	   (cdr (split-string  (shell-command-to-string "pydoc topics") "\n" t " ")))))
+
+
+(defun pydoc-keywords ()
+  "List of topics from the shell-command `pydoc keywords`."
+  (apply
+   'append
+   (mapcar (lambda (x) (split-string x " " t " "))
+	   (cdr (split-string  (shell-command-to-string "pydoc keywords") "\n" t " ")))))
+
+
+(defvar *pydoc-all-modules*
+  nil
+  "Cached value of all modules.")
+
+
+(defun pydoc-all-modules (&optional reload)
+  "Alphabetically sorted list of all modules.
+Value is cached to speed up subsequent calls.
+Optional RELOAD rereads the cache."
+  (if (and (not reload) *pydoc-all-modules*)
+      *pydoc-all-modules*
+    (setq *pydoc-all-modules*
+	  (sort
+	   (append
+	    (pydoc-topics)
+	    (pydoc-keywords)
+	    (pydoc-builtin-modules)
+	    (pydoc-user-modules)
+	    (pydoc-pkg-modules))
+	   'string<))))
+
+
+;;* Fontification functions
+;;** Fontifying code
 (defconst pydoc-example-code-leader-re
   (rx line-start
       (zero-or-one " |")                ; Within a class
@@ -448,7 +521,8 @@ These are lines marked by `pydoc-example-code-leader-re'."
     t))
 
 
-;; Overlay images on LaTeX fragments. Note you need to escape some things in the
+;;** Overlay images on LaTeX fragments.
+;; Note you need to escape some things in the
 ;; python docstrings, e.g. \\f, \\b, \\\\, \\r, \\n
 
 (defun pydoc-latex-overlays-1 (limit)
@@ -517,7 +591,7 @@ this is less robust than useing \(\)"
 	 default-directory 'overlays "" '()  'forbuffer
 	 org-latex-create-formula-image-program)))))
 
-
+;;** font-lock keywords
 (defvar pydoc-font-lock-keywords
   `((pydoc-fontify-inline-code)
     (org-activate-plain-links)
@@ -533,61 +607,7 @@ this is less robust than useing \(\)"
      1 font-lock-constant-face)))
 
 
-(defvar pydoc-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map "n" 'next-line)
-    (define-key map "N" 'forward-page)
-    (define-key map "p" 'previous-line)
-    (define-key map "P" 'backward-page)
-    (define-key map "f" 'forward-char)
-    (define-key map "b" 'backward-char)
-    (define-key map "F" 'forward-word)
-    (define-key map "B" 'backward-word)
-    (define-key map "o" 'occur)
-    (define-key map "s" 'isearch-forward)
-    (define-key map "j" 'pydoc-jump-to-section)
-    (define-key map "," (lambda () (interactive) (help-xref-go-back (current-buffer))))
-    (define-key map "." (lambda () (interactive) (help-xref-go-forward (current-buffer))))
-    map)
-  "Keymap for Pydoc mode.")
-
-
-;;;###autoload
-(define-derived-mode pydoc-mode help-mode "Pydoc"
-  "Major mode for viewing pydoc output.
-Commands:
-\\{pydoc-mode-map}"
-  (set (make-local-variable 'font-lock-defaults)
-       '((pydoc-font-lock-keywords) t nil))
-  :keymap pydoc-mode-map)
-
-
-(defun pydoc-mode-setup ()
-  (pydoc-mode)
-  (setq buffer-read-only nil))
-
-
-(defun pydoc-mode-finish ()
-  (when (derived-mode-p 'pydoc-mode)
-    (pydoc-set-info)
-    (pydoc-make-xrefs (current-buffer))
-    ;; When the following is in font-lock, emacs tends to crash. So I put it
-    ;; here.
-    (setq buffer-read-only nil)
-    (save-excursion
-      (dolist (f '(;; pydoc-image-overlays
-		   pydoc-latex-overlays-1
-		   pydoc-latex-overlays-2
-		   pydoc-latex-overlays-3
-		   pydoc-latex-overlays-4
-		   pydoc-latex-overlays-5
-		   org-display-inline-images))
-	(goto-char (point-min))
-	(funcall f nil)))
-    (setq buffer-read-only t)
-    (run-hooks 'pydoc-after-finish-hook)))
-
-
+;;* pydoc buffer setup
 (defmacro pydoc-with-help-window (buffer-name &rest body)
   "Display buffer named BUFFER-NAME in a pydoc help window.
 This is the same as `with-help-window', except `pydoc-mode-setup'
@@ -628,81 +648,77 @@ and `pydoc-mode-finish' are used instead of `help-mode-setup' and
         (if tail (setcdr tail nil))))
     (setq help-xref-stack-item item)))
 
-
-(defun pydoc-builtin-modules ()
-  "Return list of built in python modules."
-  (mapcar
-   'symbol-name
-   (read (shell-command-to-string "python -c \"import sys; print('({})'.format(' '.join(['\"{}\"'.format(x) for x in sys.builtin_module_names])))\""))))
-
-
-(defun pydoc-user-modules ()
-  "Return a list of strings for user-installed modules."
-  (mapcar
-   'symbol-name
-   (read
-    (shell-command-to-string
-     "python -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \""))))
-
-
-(defun pydoc-pkg-modules ()
-  "Return list of built in python modules."
-  (mapcar
-   'symbol-name
-   (read (shell-command-to-string "python -c \"import pkgutil; print('({})'.format(' '.join(['\"{}\"'.format(x[1]) for x in pkgutil.iter_modules()])))\""))))
-
-
-(defun pydoc-topics ()
-  "List of topics from the shell-command `pydoc topics`."
-  (apply
-   'append
-   (mapcar (lambda (x) (split-string x " " t " "))
-	   (cdr (split-string  (shell-command-to-string "pydoc topics") "\n" t " ")))))
-
-
-(defun pydoc-keywords ()
-  "List of topics from the shell-command `pydoc keywords`."
-  (apply
-   'append
-   (mapcar (lambda (x) (split-string x " " t " "))
-	   (cdr (split-string  (shell-command-to-string "pydoc keywords") "\n" t " ")))))
-
-
-(defvar *pydoc-all-modules*
-  nil
-  "Cached value of all modules.")
-
-
-(defun pydoc-all-modules ()
-  "Alphabetically sorted list of all modules.
-Value is cached to speed up subsequent calls."
-  (if *pydoc-all-modules*
-      *pydoc-all-modules*
-    (setq *pydoc-all-modules*
-	  (sort
-	   (append
-	    (pydoc-topics)
-	    (pydoc-keywords)
-	    (pydoc-builtin-modules)
-	    (pydoc-user-modules)
-	    (pydoc-pkg-modules))
-	   'string<))))
+;;* The main major mode definition
+(defvar pydoc-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "n" 'next-line)
+    (define-key map "N" 'forward-page)
+    (define-key map "p" 'previous-line)
+    (define-key map "P" 'backward-page)
+    (define-key map "f" 'forward-char)
+    (define-key map "b" 'backward-char)
+    (define-key map "F" 'forward-word)
+    (define-key map "B" 'backward-word)
+    (define-key map "o" 'occur)
+    (define-key map "s" 'isearch-forward)
+    (define-key map "j" 'pydoc-jump-to-section)
+    (define-key map "," (lambda () (interactive) (help-xref-go-back (current-buffer))))
+    (define-key map "." (lambda () (interactive) (help-xref-go-forward (current-buffer))))
+    map)
+  "Keymap for Pydoc mode.")
 
 
 ;;;###autoload
-(defun pydoc (name)
-  "Display pydoc information for NAME in `pydoc-buffer'."
-  (interactive
-   (list
-    (ido-completing-read
-     "Name of function or module: "
-     (pydoc-all-modules))))
+(define-derived-mode pydoc-mode help-mode "Pydoc"
+  "Major mode for viewing pydoc output.
+Commands:
+\\{pydoc-mode-map}"
+  (set (make-local-variable 'font-lock-defaults)
+       '((pydoc-font-lock-keywords) t nil))
+  :keymap pydoc-mode-map)
 
-  (pydoc-setup-xref (list #'pydoc name)
-                    (called-interactively-p 'interactive))
-  (pydoc-with-help-window (pydoc-buffer)
-    (call-process-shell-command (concat pydoc-command " " name)
-				nil standard-output)))
+
+(defun pydoc-mode-setup ()
+  (pydoc-mode)
+  (setq buffer-read-only nil))
+
+
+(defun pydoc-mode-finish ()
+  (when (derived-mode-p 'pydoc-mode)
+    (pydoc-set-info)
+    (pydoc-make-xrefs (current-buffer))
+    (setq buffer-read-only nil)
+    ;; When the following functions are in font-lock, emacs tends to crash. So I
+    ;; put it here.
+    (save-excursion
+      (dolist (f '( ;; pydoc-image-overlays
+		   pydoc-latex-overlays-1
+		   pydoc-latex-overlays-2
+		   pydoc-latex-overlays-3
+		   pydoc-latex-overlays-4
+		   pydoc-latex-overlays-5
+		   org-display-inline-images))
+	(goto-char (point-min))
+	(funcall f nil)))
+    (setq buffer-read-only t)
+    (run-hooks 'pydoc-after-finish-hook)))
+
+;;* The pydoc functions
+;;;###autoload
+(defun pydoc (&optional arg)
+  "Display pydoc information in `pydoc-buffer'.
+You will be prompted for a module/class/function.
+with ARG reread all available Python modules."
+  (interactive "P")
+  (let ((name (ido-completing-read
+	       "Name of function or module: "
+	       (pydoc-all-modules arg))))
+
+    (pydoc-setup-xref (list #'pydoc name)
+		      (called-interactively-p 'interactive))
+    (pydoc-with-help-window (pydoc-buffer)
+      (call-process-shell-command (concat pydoc-command " " name)
+				  nil standard-output))))
 
 ;;;###autoload
 (defun pydoc-at-point ()
@@ -715,7 +731,9 @@ There is no way right now to get to the full module path. This is a known limita
 	 (line (line-number-at-pos))
 	 (column (current-column))
 	 (tfile (make-temp-file "py-"))
-	 (python-script (format "import jedi
+	 (python-script
+	  (format
+	   "import jedi
 s = jedi.Script(\"\"\"%s\"\"\", %s, %s, path=\"%s\")
 gd = s.goto_definitions()
 
@@ -729,10 +747,12 @@ NAME
 
 FILE
     {1}::{2}'''.format(gd[0].full_name, gd[0].module_path, gd[0].line, gd[0].name, gd[0].docstring()))"
-				script
-				line
-				column
-				tfile)))
+	   ;; I found I need to quote double quotes so they
+	   ;; work in the script above.
+	   (replace-regexp-in-string "\"" "\\\\\"" script)
+	   line
+	   column
+	   tfile)))
 
     (pydoc-setup-xref (list #'pydoc (thing-at-point 'word))
 		      (called-interactively-p 'interactive))
@@ -744,10 +764,48 @@ FILE
 				  nil standard-output)
       (delete-file tfile))))
 
+
+;;** pydoc browser
+(defvar *pydoc-browser-process*
+  nil
+  "Process for the pydoc browser.")
+
+
+(defvar *pydoc-browser-port*
+  nil
+  "Port the pydoc browser is on.")
+
+
 ;;;###autoload
 (defun pydoc-browse ()
+  "Open a browser to pydoc.
+Attempts to find an open port, and to reuse the process."
   (interactive)
-  (shell-command "pydoc -b &"))
+  (if *pydoc-browser-process*
+      (browse-url (format "http://localhost:%s" *pydoc-browser-port*))
+    ;; find an open port
+    (if (executable-find "lsof")
+	(loop for port from 1025
+	      if (string= "" (shell-command-to-string (format "lsof -i :%s" port)))
+	      return (setq *pydoc-browser-port* (number-to-string port)))
+      ;; Windows may not have an lsof command.
+      (setq *pydoc-browser-port* "1234"))
+
+    (setq *pydoc-browser-process*
+	  (start-process
+	   "pydoc-browser"
+	   "*pydoc-browser*"
+	   "pydoc" "-p" *pydoc-browser-port* "-b"))))
+
+
+;;;###autoload
+(defun pydoc-browse-kill ()
+  "Kill the pydoc browser."
+  (when *pydoc-browser-process*
+    (kill-process *pydoc-browser-process*)
+    (setq *pydoc-browser-process* nil
+	  *pydoc-browser-port* nil)))
+
 
 (provide 'pydoc)
 
