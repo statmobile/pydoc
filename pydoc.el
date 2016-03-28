@@ -483,7 +483,7 @@ Adapted from `help-make-xrefs'."
   (apply
    'append
    (mapcar (lambda (x) (split-string x " " t " "))
-	   (cdr (split-string  (shell-command-to-string "pydoc topics") "\n" t " ")))))
+	   (cdr (split-string  (shell-command-to-string "python -m pydoc topics") "\n" t " ")))))
 
 
 (defun pydoc-keywords ()
@@ -491,7 +491,7 @@ Adapted from `help-make-xrefs'."
   (apply
    'append
    (mapcar (lambda (x) (split-string x " " t " "))
-	   (cdr (split-string  (shell-command-to-string "pydoc keywords") "\n" t " ")))))
+	   (cdr (split-string  (shell-command-to-string "python -m pydoc keywords") "\n" t " ")))))
 
 
 (defvar *pydoc-all-modules*
