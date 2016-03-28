@@ -832,7 +832,7 @@ Attempts to find an open port, and to reuse the process."
 	  (start-process
 	   "pydoc-browser"
 	   "*pydoc-browser*"
-	   "pydoc" "-p" *pydoc-browser-port* "-b"))))
+	   "pydoc" "-p" *pydoc-browser-port*))))
 
 
 ;;;###autoload
