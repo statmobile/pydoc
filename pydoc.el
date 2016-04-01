@@ -818,8 +818,7 @@ OTHER MODULES IN THIS FILE
   "Open a browser to pydoc.
 Attempts to find an open port, and to reuse the process."
   (interactive)
-  (if *pydoc-browser-process*
-      (browse-url (format "http://localhost:%s" *pydoc-browser-port*))
+  (unless *pydoc-browser-process*
     ;; find an open port
     (if (executable-find "lsof")
 	(loop for port from 1025
@@ -827,13 +826,14 @@ Attempts to find an open port, and to reuse the process."
 	      return (setq *pydoc-browser-port* (number-to-string port)))
       ;; Windows may not have an lsof command.
       (setq *pydoc-browser-port* "1234"))
-
+    
     (setq *pydoc-browser-process*
-	  (start-process
-	   "pydoc-browser"
-	   "*pydoc-browser*"
-	   "pydoc" "-p" *pydoc-browser-port*))))
-
+          (apply
+           #'start-process
+           "pydoc-browser"
+           "*pydoc-browser*"
+           (append (split-string pydoc-command) `("-p" ,*pydoc-browser-port*)))))
+  (browse-url (format "http://localhost:%s" *pydoc-browser-port*)))
 
 ;;;###autoload
 (defun pydoc-browse-kill ()
