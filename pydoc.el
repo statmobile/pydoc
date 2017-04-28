@@ -741,7 +741,7 @@ Commands:
 Completion is provided with candidates from `pydoc-all-modules'.
 This is cached for speed. Use a prefix arg to refresh it."
   (interactive
-   (list (ido-completing-read
+   (list (completing-read
 	  "Name of function or module: "
 	  (pydoc-all-modules current-prefix-arg))))
   (pydoc-setup-xref (list #'pydoc name)
