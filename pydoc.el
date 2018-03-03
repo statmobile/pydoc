@@ -789,7 +789,7 @@ OTHER MODULES IN THIS FILE
 '''.format(gd[0].full_name, gd[0].module_path, gd[0].line, gd[0].name, gd[0].docstring(), related))"
 	   ;; I found I need to quote double quotes so they
 	   ;; work in the script above.
-	   (replace-regexp-in-string "\"" "\\\\\"" script)
+	   (replace-regexp-in-string "\"" "\\\\\"" (replace-regexp-in-string "\\\\" "\\\\\\\\" script))
 	   line
 	   column
 	   tfile)))
