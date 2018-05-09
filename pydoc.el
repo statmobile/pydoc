@@ -525,14 +525,15 @@ Optional RELOAD rereads the cache."
   (if (and (not reload) *pydoc-all-modules*)
       *pydoc-all-modules*
     (setq *pydoc-all-modules*
-	  (sort
-	   (append
-	    (pydoc-topics)
-	    (pydoc-keywords)
-	    (pydoc-builtin-modules)
-	    (pydoc-user-modules)
-	    (pydoc-pkg-modules))
-	   'string<))))
+	  (delete-dups
+	   (sort
+	    (append
+	     (pydoc-topics)
+	     (pydoc-keywords)
+	     (pydoc-builtin-modules)
+	     (pydoc-user-modules)
+	     (pydoc-pkg-modules))
+	    'string<)))))
 
 
 ;;* Fontification functions
