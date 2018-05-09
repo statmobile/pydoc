@@ -350,6 +350,7 @@ Optional argument BUFFER which is used if provided."
         (while (re-search-forward ",\\s-*\\(\\w+\\)" line-end t)
           (help-xref-button 1 'pydoc-help (match-string 1)))))))
 
+
 (defun pydoc--buttonize-other ()
   "Buttonize the OTHER section.
 This section is unique to `pydoc-at-point' output."
