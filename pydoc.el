@@ -767,10 +767,19 @@ There is no way right now to get to the full module path. This is a known limita
 s = jedi.Script(\"\"\"%s\"\"\", %s, %s, path=\"%s\")
 gd = s.goto_definitions()
 
+version = [int(x) for x in jedi.__version__.split('.')]
+
 if len(gd) > 0:
-    script_modules = gd[0]._evaluator.modules
+    if version[1] == 11:
+        script_modules = gd[0]._evaluator.modules
+    else:
+        script_modules = list(gd[0]._evaluator.module_cache.iterate_modules_with_names())
+
     if len(script_modules) > 0:
-        related = '\\n    '.join([smod for smod in script_modules if 'py-' not in smod])
+        if version[1] == 11:
+            related = '\\n    '.join([smod for smod in script_modules if 'py-' not in smod])
+        else:
+            related = '\\n    '.join([smod[0] for smod in script_modules if 'py-' not in smod])
     else:
         related = None
 
