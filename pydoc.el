@@ -350,6 +350,7 @@ Optional argument BUFFER which is used if provided."
         (while (re-search-forward ",\\s-*\\(\\w+\\)" line-end t)
           (help-xref-button 1 'pydoc-help (match-string 1)))))))
 
+
 (defun pydoc--buttonize-other ()
   "Buttonize the OTHER section.
 This section is unique to `pydoc-at-point' output."
@@ -462,14 +463,29 @@ Adapted from `help-make-xrefs'."
    (read (shell-command-to-string "python -c \"import sys; print('({})'.format(' '.join(['\"{}\"'.format(x) for x in sys.builtin_module_names])))\""))))
 
 
+(defun pydoc-pip-version ()
+  "Return a list of (major minor revision) for the pip version."
+  (let* ((output (shell-command-to-string "pip --version"))
+	 (string-version (nth 1 (split-string output " " t)))
+	 (string-major-minor-rev (split-string string-version "\\.")))
+    (mapcar
+     'string-to-number
+     string-major-minor-rev)))
+
+
 (defun pydoc-user-modules ()
   "Return a list of strings for user-installed modules."
   (if (executable-find "pip")
-      (mapcar
-       'symbol-name
-       (read
-	(shell-command-to-string
-	 "python -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \"")))
+      (if (< (car (pydoc-pip-version)) 10)
+	  (mapcar
+	   'symbol-name
+	   (read
+	    (shell-command-to-string
+	     "python -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \"")))
+	;; pip is version 10 or greater
+	(mapcar (lambda (alist) (alist-get 'name alist))
+		(json-read-from-string
+		 (shell-command-to-string "pip list --format=json"))))
     (message "pip not found. No user-installed modules found.")
     '()))
 
@@ -509,14 +525,15 @@ Optional RELOAD rereads the cache."
   (if (and (not reload) *pydoc-all-modules*)
       *pydoc-all-modules*
     (setq *pydoc-all-modules*
-	  (sort
-	   (append
-	    (pydoc-topics)
-	    (pydoc-keywords)
-	    (pydoc-builtin-modules)
-	    (pydoc-user-modules)
-	    (pydoc-pkg-modules))
-	   'string<))))
+	  (delete-dups
+	   (sort
+	    (append
+	     (pydoc-topics)
+	     (pydoc-keywords)
+	     (pydoc-builtin-modules)
+	     (pydoc-user-modules)
+	     (pydoc-pkg-modules))
+	    'string<)))))
 
 
 ;;* Fontification functions
@@ -741,7 +758,7 @@ Commands:
 Completion is provided with candidates from `pydoc-all-modules'.
 This is cached for speed. Use a prefix arg to refresh it."
   (interactive
-   (list (ido-completing-read
+   (list (completing-read
 	  "Name of function or module: "
 	  (pydoc-all-modules current-prefix-arg))))
   (pydoc-setup-xref (list #'pydoc name)
@@ -798,7 +815,7 @@ OTHER MODULES IN THIS FILE
 '''.format(gd[0].full_name, gd[0].module_path, gd[0].line, gd[0].name, gd[0].docstring(), related))"
 	   ;; I found I need to quote double quotes so they
 	   ;; work in the script above.
-	   (replace-regexp-in-string "\"" "\\\\\"" script)
+	   (replace-regexp-in-string "\"" "\\\\\"" (replace-regexp-in-string "\\\\" "\\\\\\\\" script))
 	   line
 	   column
 	   tfile)))
