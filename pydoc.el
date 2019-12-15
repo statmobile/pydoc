@@ -475,6 +475,14 @@ Adapted from `help-make-xrefs'."
 
 (defun pydoc-user-modules ()
   "Return a list of strings for user-installed modules."
+  (mapcar 'symbol-name
+          (read
+           (shell-command-to-string
+            "python -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \""))))
+
+
+(defun pydoc-user-modules ()
+  "Return a list of strings for user-installed modules."
   (if (executable-find "pip")
       (if (< (car (pydoc-pip-version)) 10)
 	  (mapcar
