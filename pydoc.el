@@ -475,19 +475,13 @@ Adapted from `help-make-xrefs'."
 
 (defun pydoc-user-modules ()
   "Return a list of strings for user-installed modules."
-  (if (executable-find "pip")
-      (if (< (car (pydoc-pip-version)) 10)
-	  (mapcar
-	   'symbol-name
-	   (read
-	    (shell-command-to-string
-	     "python -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \"")))
-	;; pip is version 10 or greater
-	(mapcar (lambda (alist) (alist-get 'name alist))
-		(json-read-from-string
-		 (shell-command-to-string "pip list --format=json"))))
-    (message "pip not found. No user-installed modules found.")
-    '()))
+  (mapcar
+   'symbol-name
+   (read
+    (shell-command-to-string
+     ;; Use either importlib_metadata (a backport of importlib.metadata) or
+     ;; importlib.metadata itself if it is available.
+     (concat python-shell-interpreter " -c \"try: import importlib_metadata;implib_meta = importlib_metadata\nexcept: pass\ntry: import importlib.metadata;implib_meta = importlib.metadata\nexcept: implib_meta = None\nmods = sorted(map(lambda x: x.metadata['name'], implib_meta.distributions())); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \"")))))
 
 
 (defun pydoc-pkg-modules ()
