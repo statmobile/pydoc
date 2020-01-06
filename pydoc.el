@@ -481,7 +481,10 @@ Adapted from `help-make-xrefs'."
     (shell-command-to-string
      ;; Use either importlib_metadata (a backport of importlib.metadata) or
      ;; importlib.metadata itself if it is available.
-     (concat python-shell-interpreter " -c \"implib_meta = None\ntry: import importlib_metadata;implib_meta = importlib_metadata\nexcept: pass\ntry: import importlib.metadata;implib_meta = importlib.metadata\nexcept: pass\nmods = sorted(map(lambda x: x.metadata['name'], implib_meta.distributions())); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \"")))))
+     (concat python-shell-interpreter " -c \"implib_meta_backport = None\nimplib_meta_python = None\ntry: import importlib_metadata;implib_meta_backport = importlib_metadata\nexcept: pass\ntry: import importlib.metadata;implib_meta_python = importlib.metadata\nexcept: pass\nimplib_meta = implib_meta_python or implib_meta_backport\nmods = sorted(map(lambda x: x.metadata['name'], implib_meta.distributions())); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \"")
+     ;; For older versions of Python.
+     ;; (concat python-shell-interpreter " -c \"import pip; mods = sorted([i.key for i in pip.get_installed_distributions()]); print('({})'.format(' '.join(['\"{}\"'.format(x) for x in mods])))  \"")
+     ))))
 
 
 (defun pydoc-pkg-modules ()
