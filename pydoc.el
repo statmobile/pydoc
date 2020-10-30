@@ -764,6 +764,25 @@ This is cached for speed. Use a prefix arg to refresh it."
     (call-process-shell-command (concat pydoc-command " " name)
 				nil standard-output)))
 
+;;* The pydoc functions
+;;;###autoload
+(defun pydoc-at-point-no-jedi (&optional prompt)
+  "Try to get help for thing at point without python-jedi.
+With non-nil PROMPT or without a thing, prompt for the function or module."
+  (interactive "P")
+  (let ((name-of-symbol-at-point (if (symbol-at-point)
+				     (symbol-name (symbol-at-point))
+				   "")))
+    (if (or prompt
+	    (not (symbol-at-point)))
+	(pydoc (completing-read
+		"Name of function or module: "
+		(pydoc-all-modules current-prefix-arg)
+		nil nil
+		name-of-symbol-at-point))
+      (pydoc name-of-symbol-at-point))) )
+
+
 ;;;###autoload
 (defun pydoc-at-point ()
   "Try to get help for thing at point.
