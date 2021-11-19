@@ -866,7 +866,7 @@ Attempts to find an open port, and to reuse the process."
   (unless *pydoc-browser-process*
     ;; find an open port
     (if (executable-find "lsof")
-	(loop for port from 1025
+	(cl-loop for port from 1025
 	      if (string= "" (shell-command-to-string (format "lsof -i :%s" port)))
 	      return (setq *pydoc-browser-port* (number-to-string port)))
       ;; Windows may not have an lsof command.
