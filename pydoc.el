@@ -797,38 +797,29 @@ There is no way right now to get to the full module path. This is a known limita
 	 (python-script
 	  (format
 	   "import jedi
-s = jedi.Script(\"\"\"%s\"\"\", %s, %s, path=\"%s\")
-gd = s.goto_definitions()
 
 version = [int(x) for x in jedi.__version__.split('.')]
 
+if version[1] < 18:
+    raise Exception('Please install jedi 0.18:\\npip install --upgrade jedi')
+
+s = jedi.Script(code=\"\"\"%s\"\"\")
+
+# This is a list
+gd = s.infer(line=%s, column=%s)  
+
+
 if len(gd) > 0:
-    if version[1] == 11:
-        script_modules = gd[0]._evaluator.modules
-    else:
-        script_modules = list(gd[0]._evaluator.module_cache.iterate_modules_with_names())
-
-    if len(script_modules) > 0:
-        if version[1] == 11:
-            related = '\\n    '.join([smod for smod in script_modules if 'py-' not in smod])
-        else:
-            related = '\\n    '.join([smod[0] for smod in script_modules if 'py-' not in smod])
-    else:
-        related = None
-
-    print('''Help on {0}:
+    print(f'''Help on {gd[0].full_name}:
 
 NAME
-    {3}
+    {gd[0].name}
 
-{4}
+{gd[0].docstring()}
 
 FILE
-    {1}::{2}
-
-OTHER MODULES IN THIS FILE
-    {5}
-'''.format(gd[0].full_name, gd[0].module_path, gd[0].line, gd[0].name, gd[0].docstring(), related))"
+    {gd[0].module_path}::{gd[0].line}
+''')"
 	   ;; I found I need to quote double quotes so they
 	   ;; work in the script above.
 	   (replace-regexp-in-string "\"" "\\\\\"" (replace-regexp-in-string "\\\\" "\\\\\\\\" script))
