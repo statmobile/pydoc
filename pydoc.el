@@ -56,7 +56,13 @@
   :group 'help)
 
 
-(defcustom pydoc-command "python -m pydoc"
+(defcustom pydoc-python-command "python"
+  "The command to use to execute python code."
+  :type 'string
+  :group 'pydoc)
+
+
+(defcustom pydoc-command (concat pydoc-python-command " -m pydoc")
   "The command to use to run pydoc."
   :type 'string
   :group 'pydoc)
@@ -460,7 +466,7 @@ Adapted from `help-make-xrefs'."
   "Return list of built in python modules."
   (mapcar
    'symbol-name
-   (read (shell-command-to-string "python -c \"import sys; print('({})'.format(' '.join(['\"{}\"'.format(x) for x in sys.builtin_module_names])))\""))))
+   (read (shell-command-to-string (concat pydoc-python-command " -c \"import sys; print('({})'.format(' '.join(['\"{}\"'.format(x) for x in sys.builtin_module_names])))\"")))))
 
 
 (defun pydoc-pip-version ()
@@ -491,7 +497,7 @@ Adapted from `help-make-xrefs'."
   "Return list of built in python modules."
   (mapcar
    'symbol-name
-   (read (shell-command-to-string "python -c \"import pkgutil; print('({})'.format(' '.join(['\"{}\"'.format(x[1]) for x in pkgutil.iter_modules()])))\""))))
+   (read (shell-command-to-string (concat pydoc-python-command " -c \"import pkgutil; print('({})'.format(' '.join(['\"{}\"'.format(x[1]) for x in pkgutil.iter_modules()])))\"")))))
 
 
 (defun pydoc-topics ()
@@ -499,7 +505,7 @@ Adapted from `help-make-xrefs'."
   (apply
    'append
    (mapcar (lambda (x) (split-string x " " t " "))
-	   (cdr (split-string  (shell-command-to-string "python -m pydoc topics") "\n" t " ")))))
+	   (cdr (split-string  (shell-command-to-string (concat pydoc-python-command " -m pydoc topics")) "\n" t " ")))))
 
 
 (defun pydoc-keywords ()
@@ -507,7 +513,7 @@ Adapted from `help-make-xrefs'."
   (apply
    'append
    (mapcar (lambda (x) (split-string x " " t " "))
-	   (cdr (split-string  (shell-command-to-string "python -m pydoc keywords") "\n" t " ")))))
+	   (cdr (split-string  (shell-command-to-string (concat pydoc-python-command " -m pydoc keywords")) "\n" t " ")))))
 
 
 (defvar *pydoc-all-modules*
@@ -806,7 +812,7 @@ if version[1] < 18:
 s = jedi.Script(code=\"\"\"%s\"\"\")
 
 # This is a list
-gd = s.infer(line=%s, column=%s)  
+gd = s.infer(line=%s, column=%s)
 
 
 if len(gd) > 0:
@@ -833,7 +839,7 @@ FILE
     (pydoc-with-help-window (pydoc-buffer)
       (with-temp-file tfile
 	(insert python-script))
-      (call-process-shell-command (concat "python " tfile)
+      (call-process-shell-command (concat pydoc-python-command " " tfile)
 				  nil standard-output)
       (delete-file tfile))))
 
