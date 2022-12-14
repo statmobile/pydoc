@@ -15,6 +15,8 @@ Example in Python 3:
 M-x pydoc datetime.datetime.now
 ```
 
+Getting the Python object under the cursor (at point) is also supported.
+
 ## License
 
 This project is free software: You can redistribute it and/or modify
