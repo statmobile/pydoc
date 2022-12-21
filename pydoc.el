@@ -62,6 +62,12 @@
   :group 'pydoc)
 
 
+(defcustom pydoc-pip-version-command "pip --version"
+  "The command to use to get the pip version."
+  :type 'string
+  :group 'pydoc)
+
+
 (defcustom pydoc-command (concat pydoc-python-command " -m pydoc")
   "The command to use to run pydoc."
   :type 'string
@@ -471,7 +477,7 @@ Adapted from `help-make-xrefs'."
 
 (defun pydoc-pip-version ()
   "Return a list of (major minor revision) for the pip version."
-  (let* ((output (shell-command-to-string "pip --version"))
+  (let* ((output (shell-command-to-string pydoc-pip-version-command))
 	 (string-version (nth 1 (split-string output " " t)))
 	 (string-major-minor-rev (split-string string-version "\\.")))
     (mapcar
