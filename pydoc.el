@@ -522,6 +522,14 @@ Adapted from `help-make-xrefs'."
 	   (cdr (split-string  (shell-command-to-string (concat pydoc-command " keywords")) "\n" t " ")))))
 
 
+(defun pydoc-builtin-objects ()
+	"List of built-in objects, i.e., classes and functions."
+	(split-string (shell-command-to-string
+								 (concat pydoc-python-command
+												 " -c 'for i in dir(__builtins__): print(i)'"))
+								"\n" t " "))
+
+
 (defvar *pydoc-all-modules*
   nil
   "Cached value of all modules.")
@@ -539,6 +547,7 @@ Optional RELOAD rereads the cache."
 	    (append
 	     (pydoc-topics)
 	     (pydoc-keywords)
+	     (pydoc-builtin-objects)
 	     (pydoc-builtin-modules)
 	     (pydoc-user-modules)
 	     (pydoc-pkg-modules))
