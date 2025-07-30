@@ -4,9 +4,9 @@
 
 ;; Author: John Kitchin <jkitchin@andrew.cmu.edu>
 ;; Maintainer: Brian J. Lopes <statmobile@gmail.com>
-;; Contributions from Kyle Meyer
+;; Contributions from Kyle Meyer and Taro Sato <okomestudio@gmail.com>
 ;; Created: 8 Mar 2015
-;; Version: 0.2
+;; Version: 0.3
 ;; Keywords: pydoc, python
 ;; Homepage: https://github.com/statmobile/pydoc
 
@@ -18,11 +18,12 @@
 ;; colorized for readability, e.g. environment variables and strings, function
 ;; names and arguments.
 ;;
-;; https://github.com/statmobile/pydoc
+;; The pydoc.el module provides the following functions:
 ;;
-;; pydoc.el provides the following functions.
 ;; `pydoc' Run this anywhere, and enter the module/class/function you want documentation for
-;; `pydoc-at-point' Run this in a Python script to see what doc jedi can find for the point
+;; `pydoc-at-point' Run this in a Python buffer to look up the object at point
+;; `pydoc-at-point-jedi' Perform at-point object lookup using Jedi
+;; `pydoc-at-point-no-jedi' Perform at-point object lookup without Jedi
 ;; `pydoc-browse' Launches a web browser with documentation.
 ;; `pydoc-browse-kill' kills the pydoc web server.
 ;;
@@ -34,9 +35,10 @@
 ;; they will not render correctly.
 
 ;;; Changelog:
-;;
-;; Updated license and headers for release.
-;; March 2016: Major rewrite by Kyle Meyer to use help-buffers
+
+;; - Updated license and headers for release
+;; - March 2016: Major rewrite by Kyle Meyer to use help-buffers
+;; - July 2025: Add pydoc-treesit.el adapter layer
 
 ;;; Code:
 
@@ -522,12 +524,16 @@ Adapted from `help-make-xrefs'."
 	   (cdr (split-string  (shell-command-to-string (concat pydoc-command " keywords")) "\n" t " ")))))
 
 
+(defvar pydoc-builtin-objects nil)
 (defun pydoc-builtin-objects ()
 	"List of built-in objects, i.e., classes and functions."
-	(split-string (shell-command-to-string
-								 (concat pydoc-python-command
-												 " -c 'for i in dir(__builtins__): print(i)'"))
-								"\n" t " "))
+	(if pydoc-builtin-objects
+			pydoc-builtin-objects
+		(setq pydoc-builtin-objects
+					(split-string (shell-command-to-string
+												 (concat pydoc-python-command
+																 " -c 'for i in dir(__builtins__): print(i)'"))
+												"\n" t " "))))
 
 
 (defvar *pydoc-all-modules*
@@ -785,7 +791,7 @@ This is cached for speed. Use a prefix arg to refresh it."
     (call-process-shell-command (concat pydoc-command " " name)
 				nil standard-output)))
 
-;;* The pydoc functions
+
 ;;;###autoload
 (defun pydoc-at-point-no-jedi (&optional prompt)
   "Try to get help for thing at point without python-jedi.
@@ -805,7 +811,7 @@ With non-nil PROMPT or without a thing, prompt for the function or module."
 
 
 ;;;###autoload
-(defun pydoc-at-point ()
+(defun pydoc-at-point-jedi ()
   "Try to get help for thing at point.
 Requires the python package jedi to be installed.
 
@@ -857,6 +863,17 @@ FILE
       (call-process-shell-command (concat pydoc-python-command " " tfile)
 				  nil standard-output)
       (delete-file tfile))))
+
+
+;;;###autoload
+(defun pydoc-at-point ()
+	"Get help for Python object at point.
+When `python-ts-mode' is active, it runs `pydoc-treesit-at-point'. Otherwise, it
+falls back to `pydoc-at-point-jedi'."
+	(interactive)
+	(if (derived-mode-p '(python-ts-mode))
+			(pydoc-treesit-at-point)
+		(pydoc-at-point-jedi)))
 
 
 ;;** pydoc browser
