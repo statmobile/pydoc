@@ -864,6 +864,8 @@ FILE
 				  nil standard-output)
       (delete-file tfile))))
 
+;; Avoid missing function warning when AOT compiling module
+(autoload 'pydoc-treesit-at-point "pydoc-treesit")
 
 ;;;###autoload
 (defun pydoc-at-point ()
